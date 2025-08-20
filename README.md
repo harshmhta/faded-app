@@ -48,3 +48,19 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Environment Setup
+
+This project uses environment variables for sensitive configuration. Follow these steps:
+
+1. Copy `.env.example` to `.env`: `cp .env.example .env`
+2. Update the values in `.env` with your actual configuration
+3. Never commit `.env` to version control (it's already in .gitignore)
+
+### Environment Variables
+
+- `EXPO_PUBLIC_APPWRITE_ENDPOINT`: Your Appwrite server endpoint
+- `EXPO_PUBLIC_APPWRITE_PROJECT_ID`: Your Appwrite project ID  
+- `EXPO_PUBLIC_APPWRITE_PLATFORM`: Your app platform identifier
+- `EAS_PROJECT_ID`: Your EAS (Expo Application Services) project ID
+
+Note: Variables prefixed with `EXPO_PUBLIC_` are available in the client-side code.

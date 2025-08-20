@@ -1,5 +1,4 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
 
 import { Collapsible } from '@/components/Collapsible';
 import { ExternalLink } from '@/components/ExternalLink';
@@ -7,8 +6,33 @@ import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabTwoScreen() {
+  const { user, signOut } = useAuth();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: signOut,
+        },
+      ]
+    );
+  };
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
@@ -16,81 +40,64 @@ export default function TabTwoScreen() {
         <IconSymbol
           size={310}
           color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
+          name="person.crop.circle.fill"
           style={styles.headerImage}
         />
       }>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
+        <ThemedText type="title">Profile</ThemedText>
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
+      
+      <ThemedView style={styles.userInfoContainer}>
+        <ThemedText type="subtitle">Welcome back!</ThemedText>
+        <ThemedView style={styles.userDetails}>
+          <ThemedText type="defaultSemiBold">Name: {user?.name}</ThemedText>
+          <ThemedText>Email: {user?.email}</ThemedText>
+          <ThemedText>User ID: {user?.$id}</ThemedText>
+        </ThemedView>
+      </ThemedView>
+
+      <TouchableOpacity 
+        style={[styles.logoutButton, { backgroundColor: colors.tint }]}
+        onPress={handleLogout}
+      >
+        <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
+      </TouchableOpacity>
+
+      <Collapsible title="Authentication Features">
         <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
+          ✅ Protected routes - Only authenticated users can access the main app
         </ThemedText>
         <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
+          ✅ Apple Sign-in - Sign in securely with Apple ID using native authentication
+        </ThemedText>
+        <ThemedText>
+          ✅ Auto-redirect - Users are automatically redirected based on auth state
+        </ThemedText>
+        <ThemedText>
+          ✅ Appwrite Integration - User sessions managed with Appwrite backend
+        </ThemedText>
+      </Collapsible>
+
+      <Collapsible title="Apple Sign-in Info">
+        <ThemedText>
+          This app uses Apple Sign-in for authentication, with session management via Appwrite.
+        </ThemedText>
+        <ThemedText type="defaultSemiBold">Bundle ID: com.fadedapp</ThemedText>
+        <ThemedText type="defaultSemiBold">Backend: Appwrite with native Apple auth</ThemedText>
+      </Collapsible>
+
+      <Collapsible title="File-based routing">
+        <ThemedText>
+          This app now has Apple authentication route:{' '}
+          <ThemedText type="defaultSemiBold">app/(auth)/sign-in.tsx</ThemedText>
+        </ThemedText>
+        <ThemedText>
+          Protected routes: <ThemedText type="defaultSemiBold">app/(tabs)/*</ThemedText>
         </ThemedText>
         <ExternalLink href="https://docs.expo.dev/router/introduction">
           <ThemedText type="link">Learn more</ThemedText>
         </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
       </Collapsible>
     </ParallaxScrollView>
   );
@@ -106,5 +113,26 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row',
     gap: 8,
+  },
+  userInfoContainer: {
+    marginVertical: 20,
+    padding: 15,
+    borderRadius: 8,
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
+  },
+  userDetails: {
+    marginTop: 10,
+    gap: 5,
+  },
+  logoutButton: {
+    padding: 15,
+    borderRadius: 8,
+    marginVertical: 20,
+    alignItems: 'center',
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
