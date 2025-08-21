@@ -1,1 +1,2 @@
-export { useColorScheme } from 'react-native';
+// Re-export the useColorScheme from ThemeContext to maintain compatibility
+export { useColorScheme } from '@/contexts/ThemeContext';

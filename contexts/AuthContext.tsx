@@ -36,7 +36,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const loadStoredAuth = async () => {
     try {
-      // Try to get current user session from Appwrite
+      // Try to get current user session from Appwrite backend only
       const currentUser = await account.get();
       const user: User = {
         $id: currentUser.$id,
@@ -44,10 +44,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         name: currentUser.name,
       };
       setUser(user);
+      console.log('Active Appwrite session found for user:', user.email);
     } catch (error) {
-      // No active session, user needs to sign in
-      console.log('No active session found');
+      // No active Appwrite session, user needs to sign in
+      console.log('No active Appwrite session found');
       setUser(null);
+      // Clear any old local storage data for security
+      await AsyncStorage.removeItem('user');
     } finally {
       setIsLoading(false);
     }
@@ -72,92 +75,96 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ],
       });
 
-      // Use Apple ID token to create session with Appwrite
-      if (appleCredential.identityToken) {
-        try {
-          const email = appleCredential.email || `${appleCredential.user}@privaterelay.appleid.com`;
-          
-          // Ensure name is valid (1-128 chars)
-          let name = 'Apple User'; // Default fallback
-          if (appleCredential.fullName) {
-            const firstName = appleCredential.fullName.givenName || '';
-            const lastName = appleCredential.fullName.familyName || '';
-            const fullName = `${firstName} ${lastName}`.trim();
-            
-            if (fullName.length > 0) {
-              // Truncate if too long (max 128 chars)
-              name = fullName.length > 128 ? fullName.substring(0, 128) : fullName;
-            }
-          }
-          
-          // Create a valid Appwrite user ID from Apple user ID
-          // Apple IDs are too long and may contain invalid chars, so we'll hash them
-          const appleUserIdHash = await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            appleCredential.user,
-            { encoding: Crypto.CryptoEncoding.HEX }
-          );
-          // Take first 32 characters and prefix with 'a' to ensure it starts with a letter
-          const appwriteUserId = `a${appleUserIdHash.substring(0, 31)}`;
-          
-          // Create a password based on Apple user ID (in production, use proper password hashing)
-          const password = `apple_${appleCredential.user}_${appleCredential.identityToken?.slice(0, 10)}`;
-          
-          let currentUser;
-          try {
-            // Try to create a new account with hashed Apple user ID as the account ID
-            currentUser = await account.create(
-              appwriteUserId, // Use hashed Apple user ID as Appwrite user ID for consistency
-              email,
-              password,
-              name
-            );
-            
-            // Create session for the new user
-            await account.createEmailPasswordSession(email, password);
-            currentUser = await account.get();
-          } catch (createError: any) {
-            if (createError.code === 409 || createError.type === 'user_already_exists') {
-              // User already exists, just sign them in
-              try {
-                await account.createEmailPasswordSession(email, password);
-                currentUser = await account.get();
-              } catch (loginError) {
-                // If login fails, try to update the existing user's password
-                console.log('Login failed, this might be a password mismatch. In production, implement proper Apple ID verification.');
-                throw loginError;
-              }
-            } else {
-              throw createError;
-            }
-          }
-          
-          const user: User = {
-            $id: currentUser.$id,
-            email: currentUser.email,
-            name: currentUser.name,
-          };
-          
-          setUser(user);
-          return true;
-        } catch (appwriteError) {
-          console.error('Appwrite session error:', appwriteError);
-          // Fall back to local storage if Appwrite fails
-          const user: User = {
-            $id: appleCredential.user,
-            email: appleCredential.email || `${appleCredential.user}@privaterelay.appleid.com`,
-            name: appleCredential.fullName 
-              ? `${appleCredential.fullName.givenName || ''} ${appleCredential.fullName.familyName || ''}`.trim()
-              : 'Apple User',
-          };
-          
-          await AsyncStorage.setItem('user', JSON.stringify(user));
-          setUser(user);
-          return true;
-        }
+      if (!appleCredential.identityToken || !appleCredential.user) {
+        console.error('Apple Sign-In failed: Missing identity token or user identifier');
+        return false;
       }
 
-      return false;
+      // React Native doesn't support OAuth2 browser redirects, use secure manual account creation
+      // Handle both shared and anonymous emails
+      const email = appleCredential.email || `${appleCredential.user}@privaterelay.appleid.com`;
+      
+      // Ensure name is valid (1-128 chars)
+      let name = 'Apple User'; // Default fallback
+      if (appleCredential.fullName) {
+        const firstName = appleCredential.fullName.givenName || '';
+        const lastName = appleCredential.fullName.familyName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        
+        if (fullName.length > 0) {
+          // Truncate if too long (max 128 chars)
+          name = fullName.length > 128 ? fullName.substring(0, 128) : fullName;
+        }
+      }
+      
+      // Use Apple's stable user identifier as the primary key
+      // This ensures consistency for both shared and anonymous emails
+      const appleUserIdHash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        `apple_stable_${appleCredential.user}`,
+        { encoding: Crypto.CryptoEncoding.HEX }
+      );
+      const appwriteUserId = `apple_${appleUserIdHash.substring(0, 28)}`;
+      
+      // Create a secure, consistent password using Apple's stable user ID
+      const passwordHash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        `apple_secure_password_${appleCredential.user}`,
+        { encoding: Crypto.CryptoEncoding.HEX }
+      );
+      const password = passwordHash.substring(0, 32);
+      
+      let currentUser;
+      try {
+        // Try to create a new account with Apple's stable user identifier
+        currentUser = await account.create(
+          appwriteUserId,
+          email,
+          password,
+          name
+        );
+        
+        console.log('Created new Apple user account:', { id: appwriteUserId, email, name });
+        
+        // Create session for the new user
+        await account.createEmailPasswordSession(email, password);
+        currentUser = await account.get();
+        
+      } catch (createError: any) {
+        if (createError.code === 409 || createError.type === 'user_already_exists') {
+          console.log('Apple user already exists, attempting sign-in...');
+          // User already exists, sign them in with consistent password
+          try {
+            await account.createEmailPasswordSession(email, password);
+            currentUser = await account.get();
+            console.log('Successfully signed in existing Apple user');
+            
+          } catch (loginError) {
+            console.error('Failed to login existing Apple user with consistent password:', loginError);
+            // This should not happen with our consistent password approach
+            throw new Error(`Authentication failed for Apple user: ${loginError.message}`);
+          }
+        } else {
+          console.error('Unexpected error creating Apple user account:', createError);
+          throw createError;
+        }
+      }
+      
+      const user: User = {
+        $id: currentUser.$id,
+        email: currentUser.email,
+        name: currentUser.name,
+      };
+      
+      console.log('Apple Sign-In successful:', { 
+        id: user.$id, 
+        email: user.email, 
+        isPrivateEmail: user.email.includes('@privaterelay.appleid.com')
+      });
+      
+      setUser(user);
+      return true;
+
     } catch (error) {
       console.error('Apple Sign In error:', error);
       return false;
@@ -171,12 +178,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = async () => {
     try {
       setIsLoading(true);
-      // Delete the current session from Appwrite
+      // Delete the current session from Appwrite backend
       await account.deleteSession('current');
+      console.log('Successfully signed out from Appwrite');
       setUser(null);
+      // Clear any local storage for security
+      await AsyncStorage.removeItem('user');
     } catch (error) {
       console.error('Sign out error:', error);
-      // Even if the API call fails, clear local user state
+      // Even if the API call fails, clear local user state for security
       await AsyncStorage.removeItem('user');
       setUser(null);
     } finally {
