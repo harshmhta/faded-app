@@ -1,4 +1,4 @@
-import { Account, Client, OAuthProvider } from 'appwrite';
+import { Account, Client, OAuthProvider } from "appwrite";
 
 // Appwrite configuration
 export const appwriteConfig = {
@@ -9,8 +9,8 @@ export const appwriteConfig = {
 
 // Initialize Appwrite client
 const client = new Client()
-  .setEndpoint(appwriteConfig.endpoint || '')
-  .setProject(appwriteConfig.projectId || '');
+  .setEndpoint(appwriteConfig.endpoint || "")
+  .setProject(appwriteConfig.projectId || "");
 
 // Initialize Account service
 export const account = new Account(client);
