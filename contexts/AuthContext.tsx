@@ -1,7 +1,9 @@
 import { account } from "@/lib/appwrite";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { makeRedirectUri } from "expo-auth-session";
 import * as Crypto from "expo-crypto";
+import * as WebBrowser from "expo-web-browser";
 import React, {
   createContext,
   ReactNode,
@@ -9,6 +11,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { Platform } from "react-native";
 
 export interface User {
   $id: string;
@@ -21,7 +24,11 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   signInWithApple: () => Promise<boolean>;
+  signInWithGoogle: () => Promise<boolean>;
+  signInWithEmail: (email: string, password: string) => Promise<boolean>;
+  signUpWithEmail: (name: string, email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -126,7 +133,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         // Try to create a new account with Apple's stable user identifier
         currentUser = await account.create(
-          appwriteUserId,
+          appwriteUserId as any,
           email,
           password,
           name,
@@ -152,14 +159,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
             await account.createEmailPasswordSession(email, password);
             currentUser = await account.get();
             console.log("Successfully signed in existing Apple user");
-          } catch (loginError) {
+          } catch (loginError: any) {
             console.error(
               "Failed to login existing Apple user with consistent password:",
               loginError,
             );
             // This should not happen with our consistent password approach
             throw new Error(
-              `Authentication failed for Apple user: ${loginError.message}`,
+              `Authentication failed for Apple user: ${String(loginError?.message || loginError)}`,
             );
           }
         } else {
@@ -217,7 +224,75 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isLoading,
     isAuthenticated: !!user,
     signInWithApple,
+    signInWithGoogle: async () => {
+      try {
+        setIsLoading(true);
+
+        // Web: Use Appwrite OAuth session which handles cookies
+        if (Platform.OS === "web") {
+          const origin = window.location.origin;
+          const successUrl = `${origin}/oauth-success`;
+          const failureUrl = `${origin}/(auth)/sign-in?error=google`;
+          await account.createOAuth2Session("google" as any, successUrl, failureUrl, []);
+          return true;
+        }
+
+        // Native: Appwrite recommended flow with deep link using preferLocalhost
+        const deepLink = new URL(makeRedirectUri({ preferLocalhost: true }));
+        const scheme = `${deepLink.protocol}//`;
+        // @ts-ignore SDK returns URL
+        const loginUrl = await (account as any).createOAuth2Token({
+          provider: "google",
+          success: `${deepLink}`,
+          failure: `${deepLink}`,
+        });
+        const result = await WebBrowser.openAuthSessionAsync(`${loginUrl}`, scheme);
+        if (result.type !== "success" || !result.url) return false;
+        const returned = new URL(result.url);
+        const secret = returned.searchParams.get("secret");
+        const userId = returned.searchParams.get("userId");
+        if (!secret || !userId) return false;
+        await account.createSession(userId, secret);
+        await loadStoredAuth();
+        return true;
+      } catch (error) {
+        console.error("Google Sign In error:", error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    signInWithEmail: async (email: string, password: string) => {
+      try {
+        setIsLoading(true);
+        await account.createEmailPasswordSession(email, password);
+        await loadStoredAuth();
+        return true;
+      } catch (error) {
+        console.error("Email Sign In error:", error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    signUpWithEmail: async (name: string, email: string, password: string) => {
+      try {
+        setIsLoading(true);
+        // Create user then sign in
+        // Generate a stable userId from email
+        const user = await account.create("unique()" as any, email, password, name);
+        await account.createEmailPasswordSession(email, password);
+        await loadStoredAuth();
+        return true;
+      } catch (error) {
+        console.error("Email Sign Up error:", error);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
     signOut,
+    refreshUser: loadStoredAuth,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,4 +1,4 @@
-import { Account, Client, OAuthProvider } from "appwrite";
+import { Account, Client } from "react-native-appwrite";
 
 // Appwrite configuration
 export const appwriteConfig = {
@@ -14,10 +14,5 @@ const client = new Client()
 
 // Initialize Account service
 export const account = new Account(client);
-
-// Export OAuth provider
-export const OAuthProviders = {
-  Apple: OAuthProvider.Apple,
-};
 
 export { client };
