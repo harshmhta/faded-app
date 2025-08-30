@@ -7,7 +7,7 @@ import React, { useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 
 export default function EmailAuthScreen() {
-  const { signInWithEmail, signUpWithEmail, isLoading } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 

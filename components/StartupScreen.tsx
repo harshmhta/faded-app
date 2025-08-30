@@ -1,11 +1,11 @@
 import React, { useEffect } from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import Animated, {
-  Easing,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
+    Easing,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
 } from "react-native-reanimated";
 import Svg, { G, Path } from "react-native-svg";
 
@@ -72,7 +72,7 @@ export function StartupScreen({ onAnimationComplete }: StartupScreenProps) {
     };
 
     startAnimation();
-  }, []);
+  }, [logoOpacity, logoScale, onAnimationComplete, screenOpacity]);
 
   const logoStyle = useAnimatedStyle(() => ({
     transform: [

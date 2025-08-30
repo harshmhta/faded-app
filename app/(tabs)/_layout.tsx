@@ -1,21 +1,21 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { Platform, View } from "react-native";
+import { Platform } from "react-native";
 
 import { HapticTab } from "@/components/HapticTab";
 import TabBarBackground from "@/components/ui/TabBarBackground";
-import { useColorScheme } from "@/hooks/useColorScheme";
+
 import {
-  Alert02Icon,
   DiscoverCircleIcon,
   Home01Icon,
   Leaf04Icon,
   Message01Icon,
+  Settings02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+
 
   return (
     <Tabs
@@ -85,30 +85,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="favorites"
-        options={{
-          title: "Panic",
-          tabBarIcon: ({ color, focused }) => (
-            <View
-              style={{
-                backgroundColor: "#FF0000",
-                borderRadius: 12,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-              }}
-            >
-              <HugeiconsIcon
-                icon={Alert02Icon}
-                size={26}
-                color="#FFFFFF"
-                strokeWidth={2.5}
-                variant={focused ? "solid" : "stroke"}
-              />
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="tools"
         options={{
           title: "Tools",
@@ -130,6 +106,21 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <HugeiconsIcon
               icon={Message01Icon}
+              size={26}
+              color={color}
+              strokeWidth={2.5}
+              variant={focused ? "solid" : "stroke"}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="favorites"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, focused }) => (
+            <HugeiconsIcon
+              icon={Settings02Icon}
               size={26}
               color={color}
               strokeWidth={2.5}

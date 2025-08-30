@@ -11,7 +11,7 @@ const Tab = createMaterialTopTabNavigator();
 
 export default function MessagesScreen() {
   const backgroundColor = useThemeColor({}, "background");
-  const textColor = useThemeColor({}, "text");
+
   const tintColor = useThemeColor({}, "tint");
   const mutedColor = useThemeColor({}, "tabIconDefault");
   const insets = useSafeAreaInsets();

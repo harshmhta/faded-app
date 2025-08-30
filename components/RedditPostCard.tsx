@@ -6,20 +6,20 @@ import { RedditPost, redditApi } from "@/services/redditApi";
 import { FavouriteIcon, Message01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import React from "react";
-import { Dimensions, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 interface RedditPostCardProps {
   post: RedditPost;
   onPress?: () => void;
 }
 
-const { width: screenWidth } = Dimensions.get("window");
+
 
 export default function RedditPostCard({ post, onPress }: RedditPostCardProps) {
   const backgroundColor = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const mutedColor = useThemeColor({}, "tabIconDefault");
-  const tintColor = useThemeColor({}, "tint");
+
 
   const getPostPreview = () => {
     return redditApi.getPostPreview(post, 120);

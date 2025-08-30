@@ -4,27 +4,25 @@ import { ThemedView } from "@/components/ThemedView";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { RedditComment, RedditPost, redditApi } from "@/services/redditApi";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Image,
+    Linking,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface RedditPostDetailProps {
   post: RedditPost;
   onClose: () => void;
 }
 
-const { width: screenWidth } = Dimensions.get("window");
+
 
 export default function RedditPostDetail({
   post,
@@ -42,14 +40,14 @@ export default function RedditPostDetail({
   const textColor = useThemeColor({}, "text");
   const mutedColor = useThemeColor({}, "tabIconDefault");
   const tintColor = useThemeColor({}, "tint");
-  const insets = useSafeAreaInsets();
+
 
   // Fetch comments when component mounts
   useEffect(() => {
     fetchComments();
-  }, [post.id, commentSort]);
+  }, [post.id, commentSort, fetchComments]);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       setLoadingComments(true);
       setCommentsError(null);
@@ -65,7 +63,7 @@ export default function RedditPostDetail({
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, [post.id, commentSort]);
 
   const handleLinkPress = async (url: string) => {
     try {

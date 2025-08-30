@@ -29,7 +29,7 @@ export default function OAuthSuccessScreen() {
       }
     };
     run();
-  }, []);
+  }, [params.secret, params.userId, refreshUser]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
