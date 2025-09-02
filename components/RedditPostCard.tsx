@@ -13,13 +13,10 @@ interface RedditPostCardProps {
   onPress?: () => void;
 }
 
-
-
 export default function RedditPostCard({ post, onPress }: RedditPostCardProps) {
   const backgroundColor = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const mutedColor = useThemeColor({}, "tabIconDefault");
-
 
   const getPostPreview = () => {
     return redditApi.getPostPreview(post, 120);

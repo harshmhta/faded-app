@@ -1,14 +1,15 @@
 import React, { useEffect } from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import Animated, {
-    Easing,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import Svg, { G, Path } from "react-native-svg";
 
+import { Colors } from "@/constants/Colors";
 import { useTheme } from "@/contexts/ThemeContext";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
@@ -86,7 +87,7 @@ export function StartupScreen({ onAnimationComplete }: StartupScreenProps) {
     opacity: screenOpacity.value,
   }));
 
-  const backgroundColor = colorScheme === "dark" ? "#000000" : "#ffffff";
+  const backgroundColor = Colors[colorScheme].background;
 
   return (
     <View style={[styles.container, { backgroundColor }]}>

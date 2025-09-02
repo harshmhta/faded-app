@@ -26,7 +26,11 @@ export interface AuthContextType {
   signInWithApple: () => Promise<boolean>;
   signInWithGoogle: () => Promise<boolean>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
-  signUpWithEmail: (name: string, email: string, password: string) => Promise<boolean>;
+  signUpWithEmail: (
+    name: string,
+    email: string,
+    password: string,
+  ) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -233,7 +237,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           const origin = window.location.origin;
           const successUrl = `${origin}/oauth-success`;
           const failureUrl = `${origin}/(auth)/sign-in?error=google`;
-          await account.createOAuth2Session("google" as any, successUrl, failureUrl, []);
+          await account.createOAuth2Session(
+            "google" as any,
+            successUrl,
+            failureUrl,
+            [],
+          );
           return true;
         }
 
@@ -246,7 +255,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           success: `${deepLink}`,
           failure: `${deepLink}`,
         });
-        const result = await WebBrowser.openAuthSessionAsync(`${loginUrl}`, scheme);
+        const result = await WebBrowser.openAuthSessionAsync(
+          `${loginUrl}`,
+          scheme,
+        );
         if (result.type !== "success" || !result.url) return false;
         const returned = new URL(result.url);
         const secret = returned.searchParams.get("secret");
@@ -280,7 +292,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setIsLoading(true);
         // Create user then sign in
         // Generate a stable userId from email
-        const user = await account.create("unique()" as any, email, password, name);
+        const user = await account.create(
+          "unique()" as any,
+          email,
+          password,
+          name,
+        );
         await account.createEmailPasswordSession(email, password);
         await loadStoredAuth();
         return true;

@@ -8,18 +8,18 @@ export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
 
   return (
-    <ScrollView 
+    <ScrollView
       ref={scrollViewRef}
-      style={styles.container} 
+      style={styles.container}
       showsVerticalScrollIndicator={false}
     >
       {/* Dashboard Header */}
       <DashboardHeader parentScrollRef={scrollViewRef} />
-      
+
       {/* Main Content */}
       <View style={styles.contentContainer}>
         <ThemedText type="title">Dashboard</ThemedText>
-        
+
         {/* Your main dashboard content will go here */}
         <View style={styles.placeholderContainer}>
           <ThemedText>Your dashboard content will appear here</ThemedText>
@@ -40,6 +40,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     padding: 20,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
 });

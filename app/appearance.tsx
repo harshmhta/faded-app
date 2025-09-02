@@ -83,6 +83,10 @@ export default function AppearanceScreen() {
         options={{
           title: "Appearance",
           headerShown: true,
+          headerTransparent: false,
+          contentStyle: {
+            backgroundColor: Colors[colorScheme ?? "light"].background,
+          },
           headerTitleStyle: {
             fontSize: 18,
             fontFamily: FontFamily.medium,

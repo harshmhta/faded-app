@@ -1,12 +1,13 @@
+import { useColorScheme } from "@/hooks/useColorScheme";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import { StyleSheet } from "react-native";
 
 export default function BlurTabBarBackground() {
+  const colorScheme = useColorScheme() ?? "light";
   return (
     <BlurView
-      // Light material for a clean, bright appearance without gray tint
-      tint="light"
+      tint={colorScheme === "dark" ? "dark" : "light"}
       intensity={50}
       style={StyleSheet.absoluteFill}
     />

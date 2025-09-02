@@ -6,23 +6,21 @@ import { RedditComment, RedditPost, redditApi } from "@/services/redditApi";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    Linking,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface RedditPostDetailProps {
   post: RedditPost;
   onClose: () => void;
 }
-
-
 
 export default function RedditPostDetail({
   post,
@@ -40,7 +38,6 @@ export default function RedditPostDetail({
   const textColor = useThemeColor({}, "text");
   const mutedColor = useThemeColor({}, "tabIconDefault");
   const tintColor = useThemeColor({}, "tint");
-
 
   // Fetch comments when component mounts
   useEffect(() => {

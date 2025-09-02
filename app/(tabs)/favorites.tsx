@@ -1,10 +1,9 @@
-
 import { router } from "expo-router";
 import {
-    Linking,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -16,15 +15,15 @@ import { FontFamily } from "@/constants/Fonts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import {
-    AccountSetting03Icon,
-    ArrowRight01Icon,
-    CreditCardIcon,
-    CustomerSupportIcon,
-    Logout02Icon,
-    NewTwitterIcon,
-    NotificationBubbleIcon,
-    PaintBoardIcon,
-    StarIcon,
+  AccountSetting03Icon,
+  ArrowRight01Icon,
+  CreditCardIcon,
+  CustomerSupportIcon,
+  Logout02Icon,
+  NewTwitterIcon,
+  NotificationBubbleIcon,
+  PaintBoardIcon,
+  StarIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 
@@ -300,7 +299,7 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 12,
     opacity: 0.5,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   footerLinks: {
     flexDirection: "row",

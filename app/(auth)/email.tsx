@@ -4,7 +4,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { router } from "expo-router";
 import React, { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 export default function EmailAuthScreen() {
   const { signInWithEmail, signUpWithEmail } = useAuth();
@@ -24,7 +32,10 @@ export default function EmailAuthScreen() {
     if (ok) {
       router.replace("/(tabs)");
     } else {
-      Alert.alert("Error", "Authentication failed. Please check details and try again.");
+      Alert.alert(
+        "Error",
+        "Authentication failed. Please check details and try again.",
+      );
     }
   };
 
@@ -58,9 +69,14 @@ export default function EmailAuthScreen() {
   });
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <View style={styles.content}>
-        <Text style={styles.title}>{mode === "signin" ? "Sign in with Email" : "Create your account"}</Text>
+        <Text style={styles.title}>
+          {mode === "signin" ? "Sign in with Email" : "Create your account"}
+        </Text>
 
         {mode === "signup" && (
           <TextInput
@@ -98,8 +114,14 @@ export default function EmailAuthScreen() {
         </View>
 
         <View style={styles.switchRow}>
-          <Text style={{ color: colors.text }}> {mode === "signin" ? "New here?" : "Already have an account?"} </Text>
-          <Text style={styles.cta} onPress={() => setMode(mode === "signin" ? "signup" : "signin")}>
+          <Text style={{ color: colors.text }}>
+            {" "}
+            {mode === "signin" ? "New here?" : "Already have an account?"}{" "}
+          </Text>
+          <Text
+            style={styles.cta}
+            onPress={() => setMode(mode === "signin" ? "signup" : "signin")}
+          >
             {mode === "signin" ? "Create one" : "Sign in"}
           </Text>
         </View>
@@ -107,5 +129,3 @@ export default function EmailAuthScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-

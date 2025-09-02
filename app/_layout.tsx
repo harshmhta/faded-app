@@ -1,16 +1,19 @@
 import {
-    DarkTheme,
-    DefaultTheme,
-    ThemeProvider as ReactNavigationThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider as ReactNavigationThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { StyleSheet, View } from "react-native";
 import "react-native-reanimated";
 
+import { GlobalMeshBackground } from "@/components/GlobalMeshBackground";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { StartupScreen } from "@/components/StartupScreen";
+import { Colors } from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
@@ -49,10 +52,19 @@ export default function RootLayout() {
             <StartupScreen onAnimationComplete={handleStartupComplete} />
           ) : (
             <ProtectedRoute>
-              <Stack>
+              <Stack
+                screenOptions={{
+                  contentStyle: { backgroundColor: "transparent" },
+                  headerTransparent: true,
+                  headerStyle: { backgroundColor: "transparent" },
+                }}
+              >
                 <Stack.Screen name="(auth)" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="oauth-success" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="oauth-success"
+                  options={{ headerShown: false }}
+                />
                 <Stack.Screen name="+not-found" />
                 <Stack.Screen
                   name="appearance"
@@ -65,7 +77,6 @@ export default function RootLayout() {
               </Stack>
             </ProtectedRoute>
           )}
-          <StatusBar style="auto" />
         </ThemeWrapper>
       </AuthProvider>
     </ThemeProvider>
@@ -75,11 +86,40 @@ export default function RootLayout() {
 function ThemeWrapper({ children }: { children: React.ReactNode }) {
   const { colorScheme } = useTheme();
 
+  const navigationTheme = useMemo(() => {
+    const base = colorScheme === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        background: "transparent",
+        card: base.colors.card,
+        border: base.colors.border,
+        text: base.colors.text,
+        primary: base.colors.primary,
+        notification: base.colors.notification,
+      },
+    };
+  }, [colorScheme]);
+
   return (
-    <ReactNavigationThemeProvider
-      value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
-    >
-      {children}
+    <ReactNavigationThemeProvider value={navigationTheme}>
+      <View
+        style={[
+          styles.appContainer,
+          { backgroundColor: Colors[colorScheme].background },
+        ]}
+      >
+        <GlobalMeshBackground />
+        {children}
+        <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+      </View>
     </ReactNavigationThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  appContainer: {
+    flex: 1,
+  },
+});

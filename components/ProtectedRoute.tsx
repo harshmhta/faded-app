@@ -38,10 +38,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (isLoading) {
     return (
       <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: colors.background },
-        ]}
+        style={[styles.loadingContainer, { backgroundColor: "transparent" }]}
       >
         <ActivityIndicator size="large" color={colors.tint} />
       </View>

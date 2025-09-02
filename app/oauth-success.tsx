@@ -15,8 +15,10 @@ export default function OAuthSuccessScreen() {
   useEffect(() => {
     const run = async () => {
       try {
-        const userId = typeof params.userId === "string" ? params.userId : undefined;
-        const secret = typeof params.secret === "string" ? params.secret : undefined;
+        const userId =
+          typeof params.userId === "string" ? params.userId : undefined;
+        const secret =
+          typeof params.secret === "string" ? params.secret : undefined;
 
         if (userId && secret) {
           // Finalize session for native using Appwrite one-time secret
@@ -45,5 +47,3 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
-
-

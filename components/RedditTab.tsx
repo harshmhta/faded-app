@@ -6,19 +6,17 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { redditApi, RedditListing, RedditPost } from "@/services/redditApi";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Modal,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type SortType = "hot" | "new" | "top" | "rising";
-
-
 
 export default function RedditTab() {
   const [posts, setPosts] = useState<RedditPost[]>([]);

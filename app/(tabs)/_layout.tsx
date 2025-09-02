@@ -4,6 +4,8 @@ import { Platform } from "react-native";
 
 import { HapticTab } from "@/components/HapticTab";
 import TabBarBackground from "@/components/ui/TabBarBackground";
+import { Colors } from "@/constants/Colors";
+import { useColorScheme } from "@/hooks/useColorScheme";
 
 import {
   DiscoverCircleIcon,
@@ -15,13 +17,15 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react-native";
 
 export default function TabLayout() {
-
+  const colorScheme = useColorScheme() ?? "light";
+  const colors = Colors[colorScheme];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#000",
-        tabBarInactiveTintColor: "rgba(0, 0, 0, 0.6)",
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor:
+          colorScheme === "dark" ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,

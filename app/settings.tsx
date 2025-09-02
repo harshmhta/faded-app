@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 12,
     opacity: 0.5,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   footerLinks: {
     flexDirection: "row",
