@@ -1,7 +1,9 @@
+import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { Dimensions, ScrollView, StyleSheet, View } from "react-native";
+import { Dimensions, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { ThemedText } from "./ThemedText";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -21,6 +23,8 @@ export default function WeeklyCalendar({
   const colorScheme = useColorScheme() ?? "light";
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentWeekIndex, setCurrentWeekIndex] = useState(3); // Start at week 3 (current week)
+  const today = new Date();
+  const [selectedDate, setSelectedDate] = useState<Date | null>(today);
 
   // Generate 4 weeks of dates (3 weeks prior + current week)
   const generateWeeks = () => {
@@ -51,7 +55,6 @@ export default function WeeklyCalendar({
 
   const [weeks] = useState(generateWeeks());
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
-  const today = new Date();
 
   // Check if a date is today
   const isToday = (date: Date) => {
@@ -99,9 +102,21 @@ export default function WeeklyCalendar({
       {dayLabels.map((dayLabel, dayIndex) => {
         const date = weekDates[dayIndex];
         const isTodayDate = isToday(date);
+        const isSelected = selectedDate?.toDateString() === date.toDateString();
 
         return (
-          <View key={dayIndex} style={styles.dayContainer}>
+          <Pressable
+            key={dayIndex}
+            style={styles.dayContainer}
+            onPress={() => {
+              const isSame = selectedDate?.toDateString() === date.toDateString();
+              if (!isSame) {
+                setSelectedDate(date);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+              onDateSelect?.(date);
+            }}
+          >
             <View
               style={[
                 styles.dayCircle,
@@ -111,7 +126,7 @@ export default function WeeklyCalendar({
                     ? colorScheme === "dark"
                       ? "#FFFFFF"
                       : "#000000"
-                    : "rgba(204, 204, 204, 0.5)",
+                    : "rgba(160, 160, 160, 0.6)",
                 },
               ]}
             >
@@ -123,13 +138,12 @@ export default function WeeklyCalendar({
               style={[
                 styles.dateNumber,
                 { color: textColor },
-                isTodayDate && styles.todayDateNumber,
+                isSelected && styles.selectedDateNumber,
               ]}
-              onPress={() => onDateSelect?.(date)}
             >
               {date.getDate()}
             </ThemedText>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -202,7 +216,7 @@ const styles = StyleSheet.create({
   },
   otherDayCircle: {
     borderWidth: 1.6,
-    borderColor: "rgba(204, 204, 204, 0.5)",
+    borderColor: "rgba(160, 160, 160, 0.6)",
     borderStyle: "dashed",
     backgroundColor: "transparent",
   },
@@ -216,5 +230,9 @@ const styles = StyleSheet.create({
   },
   todayDateNumber: {
     fontWeight: "700",
+    fontFamily: FontFamily.medium,
+  },
+  selectedDateNumber: {
+    fontFamily: FontFamily.medium,
   },
 });

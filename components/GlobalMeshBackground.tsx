@@ -21,15 +21,15 @@ export function GlobalMeshBackground() {
         "#7AA31E0D",
       ]
     : [
-        "#297FE21A",
-        "#577D141A",
-        "#9ECA501A",
-        "#297FE20D",
+        "#297FE233",
+        "#577D1433",
+        "#9ECA5033",
+        "#297FE226",
         "#FFFFFF",
-        "#9ECA500D",
-        "#297FE206",
-        "#577D1406",
-        "#9ECA5006",
+        "#9ECA5026",
+        "#297FE214",
+        "#577D1414",
+        "#9ECA5014",
       ];
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>

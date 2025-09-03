@@ -2,7 +2,7 @@ import "dotenv/config";
 
 export default {
   expo: {
-    name: "fadedapp",
+    name: "Faded",
     slug: "fadedapp",
     version: "1.0.0",
     orientation: "portrait",
