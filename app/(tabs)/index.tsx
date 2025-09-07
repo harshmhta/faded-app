@@ -2,7 +2,6 @@ import React, { useRef } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import DashboardHeader from "@/components/DashboardHeader";
-import { ThemedText } from "@/components/ThemedText";
 
 export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
@@ -18,12 +17,8 @@ export default function HomeScreen() {
 
       {/* Main Content */}
       <View style={styles.contentContainer}>
-        <ThemedText type="title">Dashboard</ThemedText>
-
         {/* Your main dashboard content will go here */}
-        <View style={styles.placeholderContainer}>
-          <ThemedText>Your dashboard content will appear here</ThemedText>
-        </View>
+        <View style={styles.placeholderContainer}></View>
       </View>
     </ScrollView>
   );

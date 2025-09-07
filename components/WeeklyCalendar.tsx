@@ -3,7 +3,13 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { Dimensions, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { ThemedText } from "./ThemedText";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -109,7 +115,8 @@ export default function WeeklyCalendar({
             key={dayIndex}
             style={styles.dayContainer}
             onPress={() => {
-              const isSame = selectedDate?.toDateString() === date.toDateString();
+              const isSame =
+                selectedDate?.toDateString() === date.toDateString();
               if (!isSame) {
                 setSelectedDate(date);
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

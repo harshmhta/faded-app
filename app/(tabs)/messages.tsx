@@ -14,8 +14,7 @@ export default function MessagesScreen() {
           paddingTop: Platform.OS === "ios" ? insets.top : 0,
         },
       ]}
-    >
-    </ThemedView>
+    ></ThemedView>
   );
 }
 
