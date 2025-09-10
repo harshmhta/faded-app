@@ -8,6 +8,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
 
 import { GlobalMeshBackground } from "@/components/GlobalMeshBackground";
@@ -45,41 +46,57 @@ export default function RootLayout() {
   };
 
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <ThemeWrapper>
-          {showStartup ? (
-            <StartupScreen onAnimationComplete={handleStartupComplete} />
-          ) : (
-            <ProtectedRoute>
-              <Stack
-                screenOptions={{
-                  contentStyle: { backgroundColor: "transparent" },
-                  headerTransparent: true,
-                  headerStyle: { backgroundColor: "transparent" },
-                }}
-              >
-                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen
-                  name="oauth-success"
-                  options={{ headerShown: false }}
-                />
-                <Stack.Screen name="+not-found" />
-                <Stack.Screen
-                  name="appearance"
-                  options={{ presentation: "modal", title: "Appearance" }}
-                />
-                <Stack.Screen
-                  name="settings"
-                  options={{ presentation: "modal", title: "Settings" }}
-                />
-              </Stack>
-            </ProtectedRoute>
-          )}
-        </ThemeWrapper>
-      </AuthProvider>
-    </ThemeProvider>
+    <KeyboardProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ThemeWrapper>
+            {showStartup ? (
+              <StartupScreen onAnimationComplete={handleStartupComplete} />
+            ) : (
+              <ProtectedRoute>
+                <Stack
+                  screenOptions={{
+                    contentStyle: { backgroundColor: "transparent" },
+                    headerTransparent: true,
+                    headerStyle: { backgroundColor: "transparent" },
+                  }}
+                >
+                  <Stack.Screen
+                    name="(auth)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="(tabs)"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="oauth-success"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen name="+not-found" />
+                  <Stack.Screen
+                    name="appearance"
+                    options={{ presentation: "modal", title: "Appearance" }}
+                  />
+                  <Stack.Screen
+                    name="settings"
+                    options={{ presentation: "modal", title: "Settings" }}
+                  />
+                  <Stack.Screen
+                    name="category/[id]"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="content/[id]"
+                    options={{ headerShown: false }}
+                  />
+                </Stack>
+              </ProtectedRoute>
+            )}
+          </ThemeWrapper>
+        </AuthProvider>
+      </ThemeProvider>
+    </KeyboardProvider>
   );
 }
 

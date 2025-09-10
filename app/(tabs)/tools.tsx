@@ -8,14 +8,23 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
+import {
+  KeyboardAwareScrollView,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface Message {
@@ -33,33 +42,96 @@ export default function ToolsScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const keyboardAwareScrollRef = useRef<ScrollView>(null);
+
+  // Keyboard animation with spring
+  const keyboardHeight = useSharedValue(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      keyboardAwareScrollRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  useKeyboardHandler({
+    onStart: (e) => {
+      "worklet";
+      // Immediate response for keyboard opening, spring for closing
+      if (e.height > 0) {
+        keyboardHeight.value = withSpring(e.height, {
+          damping: 80,
+          stiffness: 800,
+        });
+        runOnJS(setIsKeyboardVisible)(true);
+        runOnJS(scrollToBottom)();
+      } else {
+        keyboardHeight.value = withSpring(e.height, {
+          damping: 50,
+          stiffness: 400,
+        });
+        runOnJS(setIsKeyboardVisible)(false);
+      }
+    },
+    onMove: (e) => {
+      "worklet";
+      // Follow keyboard movement immediately during interactive dismissal
+      keyboardHeight.value = e.height;
+    },
+    onEnd: (e) => {
+      "worklet";
+      // Smooth spring animation when keyboard settles
+      keyboardHeight.value = withSpring(e.height, {
+        damping: 50,
+        stiffness: 400,
+      });
+      if (e.height === 0) {
+        runOnJS(setIsKeyboardVisible)(false);
+      }
+    },
+  });
+
+  // Animated style for input container with smooth spring animation
+  const inputAnimatedStyle = useAnimatedStyle(() => {
+    const safeBottomPadding = Math.max(insets.bottom, 10) + 45;
+    const adjustedHeight = Math.max(
+      0,
+      keyboardHeight.value - safeBottomPadding,
+    );
+    return {
+      transform: [{ translateY: -adjustedHeight }],
+    };
+  });
+
+  // Handle dismissing keyboard when tapping outside
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
 
   useEffect(() => {
     // Show AI popup modal when tools page is accessed
     setShowAIPopupModal(true);
+
+    // Send initial "Hi!" message to LLM to initiate conversation
+    sendInitialMessage();
   }, []);
 
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      "keyboardDidShow",
-      () => {
-        setIsKeyboardVisible(true);
-      },
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      "keyboardDidHide",
-      () => {
-        setIsKeyboardVisible(false);
-      },
-    );
-
-    return () => {
-      keyboardDidShowListener?.remove();
-      keyboardDidHideListener?.remove();
+  const sendInitialMessage = () => {
+    const initialMessage: Message = {
+      id: Date.now().toString(),
+      text: "Hello! I'm Luma, your AI companion. How can I help you today?",
+      isUser: false,
+      timestamp: new Date(),
     };
-  }, []);
+
+    setMessages([initialMessage]);
+
+    // Scroll to bottom after adding AI message
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -76,9 +148,7 @@ export default function ToolsScreen() {
     setIsLoading(true);
 
     // Scroll to bottom after adding user message
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    scrollToBottom();
 
     try {
       const response = await fetch(
@@ -115,9 +185,7 @@ export default function ToolsScreen() {
       setMessages((prev) => [...prev, aiMessage]);
 
       // Scroll to bottom after adding AI message
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      scrollToBottom();
     } catch (error) {
       console.error("Error sending message:", error);
       const errorMessage: Message = {
@@ -133,21 +201,21 @@ export default function ToolsScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ThemedView style={[styles.content, { paddingTop: insets.top + 28 }]}>
+    <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <ThemedView style={[styles.container, { paddingTop: insets.top + 28 }]}>
         <ThemedText type="defaultSemiBold" style={styles.title}>
           Luma
         </ThemedText>
 
-        {/* Chat Messages */}
-        <ScrollView
-          ref={scrollViewRef}
+        <KeyboardAwareScrollView
+          ref={keyboardAwareScrollRef}
           style={styles.messagesContainer}
           contentContainerStyle={styles.messagesContent}
           showsVerticalScrollIndicator={false}
+          bottomOffset={20}
+          extraKeyboardSpace={20}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
         >
           {messages.length === 0 && (
             <View style={styles.emptyState}>
@@ -226,15 +294,14 @@ export default function ToolsScreen() {
               </View>
             </View>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         {/* Input Area */}
-        <View
+        <Animated.View
           style={[
             styles.inputContainer,
-            !isKeyboardVisible && {
-              paddingBottom: Math.max(insets.bottom, 10) + 45,
-            },
+            { paddingBottom: Math.max(insets.bottom, 10) + 45 },
+            inputAnimatedStyle,
           ]}
         >
           <View
@@ -301,22 +368,19 @@ export default function ToolsScreen() {
               </Pressable>
             )}
           </View>
-        </View>
+        </Animated.View>
 
         <AIPreviewModal
           visible={showAIPopupModal}
           onClose={() => setShowAIPopupModal(false)}
         />
       </ThemedView>
-    </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  content: {
     flex: 1,
     padding: 16,
   },

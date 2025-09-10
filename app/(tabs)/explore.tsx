@@ -1,10 +1,16 @@
+import { CategoryTile } from "@/components/CategoryTile";
+import ExploreCalendar from "@/components/ExploreCalendar";
+import { ResourceCard } from "@/components/ResourceCard";
 import { ThemedText } from "@/components/ThemedText";
+import { contentCategories, getFeaturedContent } from "@/data/content";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { ContentCategory, ContentItem } from "@/types/content";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
+import { router } from "expo-router";
+import React, { useRef } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -107,6 +113,17 @@ export default function ExploreResourcesScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const featuredContent = getFeaturedContent();
+
+  const handleCategoryPress = (category: ContentCategory) => {
+    router.push(`/category/${category.id}`);
+  };
+
+  const handleContentPress = (item: ContentItem) => {
+    router.push(`/content/${item.id}`);
+  };
 
   return (
     <KeyboardAvoidingView
@@ -114,6 +131,7 @@ export default function ExploreResourcesScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView
+        ref={scrollViewRef}
         style={styles.container}
         contentContainerStyle={[
           styles.content,
@@ -122,13 +140,193 @@ export default function ExploreResourcesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>
-          <Tile title={""} style={styles.fullWidthTile} hideChevron={true} />
-          <Tile title={""} />
-          <Tile title={""} />
-          <Tile title={""} />
-          <Tile title={""} />
-          <Tile title={""} />
-          <Tile title={""} />
+          {/* Sobriety Streak Tile */}
+          <View
+            style={[
+              styles.tile,
+              styles.fullWidthTile,
+              styles.streakTile,
+              isDark ? styles.tileDark : styles.tileLight,
+              isDark ? styles.tileBorderDark : styles.tileBorderLight,
+            ]}
+          >
+            <BlurView
+              tint={isDark ? "dark" : "light"}
+              intensity={24}
+              style={styles.tileBlur}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={
+                isDark
+                  ? [
+                      "rgba(255,255,255,0.05)",
+                      "rgba(255,255,255,0.015)",
+                      "rgba(255,255,255,0)",
+                    ]
+                  : ["rgba(0,0,0,0.03)", "rgba(0,0,0,0.015)", "rgba(0,0,0,0)"]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tileGradient}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={
+                isDark
+                  ? ["rgba(0,0,0,0)", "rgba(0,0,0,0.18)"]
+                  : ["rgba(0,0,0,0)", "rgba(0,0,0,0.05)"]
+              }
+              start={{ x: 0.3, y: 0.0 }}
+              end={{ x: 0.3, y: 1.0 }}
+              style={styles.tileBottomFade}
+            />
+
+            {/* Streak Content */}
+            <View style={styles.streakHeader}>
+              <ThemedText
+                style={[
+                  styles.streakTitle,
+                  isDark ? styles.tileTitleDark : styles.tileTitleLight,
+                ]}
+              >
+                Recovery Journey
+              </ThemedText>
+              <View style={styles.streakBadge}>
+                <ThemedText style={[styles.streakEmoji]}>🌟</ThemedText>
+              </View>
+            </View>
+
+            <View style={styles.streakMainContent}>
+              <View style={styles.streakNumberContainer}>
+                <ThemedText
+                  style={[
+                    styles.streakNumber,
+                    isDark ? styles.tileTitleDark : styles.tileTitleLight,
+                  ]}
+                >
+                  5
+                </ThemedText>
+                <ThemedText
+                  style={[
+                    styles.streakDays,
+                    isDark ? styles.tileSubtitleDark : styles.tileSubtitleLight,
+                  ]}
+                >
+                  days clean
+                </ThemedText>
+              </View>
+
+              <View style={styles.streakProgress}>
+                <View style={styles.progressBar}>
+                  <LinearGradient
+                    colors={["#4CAF50", "#8BC34A", "#4CAF50"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.progressFill, { width: "50%" }]}
+                  />
+                </View>
+                <ThemedText
+                  style={[
+                    styles.progressText,
+                    isDark ? styles.tileSubtitleDark : styles.tileSubtitleLight,
+                  ]}
+                >
+                  5/10 days to next milestone
+                </ThemedText>
+              </View>
+            </View>
+
+            <ExploreCalendar parentScrollRef={scrollViewRef} />
+          </View>
+
+          {/* Quick Actions */}
+          <View style={styles.sectionHeader}>
+            <ThemedText
+              style={[
+                styles.sectionTitle,
+                isDark ? styles.tileTitleDark : styles.tileTitleLight,
+              ]}
+            >
+              Quick Support
+            </ThemedText>
+          </View>
+
+          <Tile
+            title="SOS Help"
+            subtitle="Immediate support for cravings"
+            onPress={() => {
+              // Navigate to emergency coping strategies
+              router.push("/category/coping-strategies");
+            }}
+            style={[
+              styles.emergencyTile,
+              {
+                backgroundColor: isDark
+                  ? "rgba(244, 67, 54, 0.2)"
+                  : "rgba(244, 67, 54, 0.1)",
+              },
+            ]}
+          />
+
+          <Tile
+            title="Daily Check-in"
+            subtitle="How are you feeling today?"
+            onPress={() => {
+              // Navigate to mood tracking or daily reflection
+              router.push("/category/mindfulness");
+            }}
+            style={[
+              styles.checkInTile,
+              {
+                backgroundColor: isDark
+                  ? "rgba(76, 175, 80, 0.2)"
+                  : "rgba(76, 175, 80, 0.1)",
+              },
+            ]}
+          />
+
+          {/* Featured Content Section */}
+          {featuredContent.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <ThemedText
+                  style={[
+                    styles.sectionTitle,
+                    isDark ? styles.tileTitleDark : styles.tileTitleLight,
+                  ]}
+                >
+                  Recommended for You
+                </ThemedText>
+              </View>
+              {featuredContent.slice(0, 2).map((item) => (
+                <ResourceCard
+                  key={item.id}
+                  item={item}
+                  onPress={handleContentPress}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Categories Section */}
+          <View style={styles.sectionHeader}>
+            <ThemedText
+              style={[
+                styles.sectionTitle,
+                isDark ? styles.tileTitleDark : styles.tileTitleLight,
+              ]}
+            >
+              Recovery Resources
+            </ThemedText>
+          </View>
+          {contentCategories.map((category) => (
+            <CategoryTile
+              key={category.id}
+              category={category}
+              onPress={handleCategoryPress}
+            />
+          ))}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -224,5 +422,86 @@ const styles = StyleSheet.create({
   fullWidthTile: {
     width: "100%",
     marginBottom: 16,
+  },
+  streakTile: {
+    justifyContent: "space-between",
+    alignItems: "stretch",
+    paddingBottom: 10,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+  },
+  streakHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  streakTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  streakBadge: {
+    backgroundColor: "rgba(255, 107, 107, 0.15)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  streakEmoji: {
+    fontSize: 16,
+  },
+  streakMainContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  streakNumberContainer: {
+    alignItems: "center",
+  },
+  streakNumber: {
+    fontSize: 32,
+    fontWeight: "800",
+    lineHeight: 36,
+  },
+  streakDays: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginTop: -2,
+  },
+  streakProgress: {
+    flex: 1,
+    marginLeft: 20,
+  },
+  progressBar: {
+    height: 6,
+    backgroundColor: "rgba(160, 160, 160, 0.2)",
+    borderRadius: 3,
+    overflow: "hidden",
+    marginBottom: 6,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  sectionHeader: {
+    width: "100%",
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  emergencyTile: {
+    borderColor: "#F44336",
+    borderWidth: 1,
+  },
+  checkInTile: {
+    borderColor: "#4CAF50",
+    borderWidth: 1,
   },
 });
