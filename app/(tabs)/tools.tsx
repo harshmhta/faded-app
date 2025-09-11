@@ -1,13 +1,33 @@
 import { AIPreviewModal } from "@/components/AIPreviewModal";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
+import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import {
+  BubbleChatIcon,
+  Call02Icon,
+  ClockIcon,
+  CustomerSupportIcon,
+  Delete02Icon,
+  FloppyDiskIcon,
+  Message01Icon,
+  MoreVerticalIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Alert,
+  AppState,
+  AppStateStatus,
+  Clipboard,
+  FlatList,
   Keyboard,
+  Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,10 +40,13 @@ import {
   useKeyboardHandler,
 } from "react-native-keyboard-controller";
 import Animated, {
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -32,6 +55,16 @@ interface Message {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  isError?: boolean;
+  isRetrying?: boolean;
+}
+
+interface ChatSession {
+  id: string;
+  messages: Message[];
+  title: string;
+  timestamp: Date;
+  isActive?: boolean;
 }
 
 export default function ToolsScreen() {
@@ -42,12 +75,32 @@ export default function ToolsScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [showTimestamp, setShowTimestamp] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const [showCrisisSupport, setShowCrisisSupport] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardAwareScrollRef = useRef<ScrollView>(null);
+  const typingDotsAnimation = useSharedValue(0);
+  const appStateRef = useRef(AppState.currentState);
 
   // Keyboard animation with spring
   const keyboardHeight = useSharedValue(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Animated styles - must be at component level to avoid hooks order issues
+  const typingDotAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(typingDotsAnimation.value, [0, 1], [0.3, 1]),
+    transform: [
+      {
+        scale: interpolate(typingDotsAnimation.value, [0, 1], [0.8, 1.2]),
+      },
+    ],
+  }));
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -107,48 +160,249 @@ export default function ToolsScreen() {
   // Handle dismissing keyboard when tapping outside
   const dismissKeyboard = () => {
     Keyboard.dismiss();
+    setSelectedMessage(null);
+    setShowTimestamp(null);
+    setShowMenu(false);
+  };
+
+  // Utility functions
+  const getRelativeTime = (timestamp: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - timestamp.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${days}d ago`;
+  };
+
+  const copyMessage = async (text: string) => {
+    await Clipboard.setString(text);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const deleteMessage = (messageId: string) => {
+    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+    setSelectedMessage(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const clearAllMessages = () => {
+    Alert.alert(
+      "Clear Chat",
+      "This will clear the current conversation without saving. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: () => {
+            setMessages([]);
+            setCurrentSessionId(null);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (
+      appStateRef.current.match(/active/) &&
+      nextAppState.match(/inactive|background/)
+    ) {
+      // App is going to background, save current session
+      if (currentSessionId && messages.length > 0) {
+        saveCurrentSession();
+      }
+    }
+    appStateRef.current = nextAppState;
+  };
+
+  const loadChatSessions = async () => {
+    try {
+      const sessionsJson = await AsyncStorage.getItem("chatSessions");
+      if (sessionsJson) {
+        const sessions = JSON.parse(sessionsJson);
+        setChatSessions(
+          sessions.map((s: any) => ({
+            ...s,
+            timestamp: new Date(s.timestamp),
+            messages: s.messages.map((m: any) => ({
+              ...m,
+              timestamp: new Date(m.timestamp),
+            })),
+          })),
+        );
+      }
+    } catch (error) {
+      console.error("Error loading chat sessions:", error);
+    }
+  };
+
+  const saveCurrentSession = async () => {
+    if (!messages.length) return;
+
+    try {
+      const sessionId = currentSessionId || Date.now().toString();
+      const title =
+        messages[0]?.text.substring(0, 50) +
+        (messages[0]?.text.length > 50 ? "..." : "");
+
+      const newSession: ChatSession = {
+        id: sessionId,
+        messages,
+        title,
+        timestamp: new Date(),
+        isActive: true,
+      };
+
+      const updatedSessions = chatSessions.filter((s) => s.id !== sessionId);
+      updatedSessions.unshift(newSession);
+
+      // Keep only last 50 sessions
+      const sessionsToSave = updatedSessions.slice(0, 50);
+
+      await AsyncStorage.setItem(
+        "chatSessions",
+        JSON.stringify(sessionsToSave),
+      );
+      setChatSessions(sessionsToSave);
+      setCurrentSessionId(sessionId);
+    } catch (error) {
+      console.error("Error saving chat session:", error);
+    }
+  };
+
+  const endAndSaveChat = () => {
+    Alert.alert(
+      "Save & Exit Chat",
+      "This will save the current conversation and start a new one. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save & Exit",
+          style: "default",
+          onPress: async () => {
+            await saveCurrentSession();
+            setMessages([]);
+            setCurrentSessionId(null);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+    );
+  };
+
+  const loadChatSession = (session: ChatSession) => {
+    setMessages(session.messages);
+    setCurrentSessionId(session.id);
+    setShowChatHistory(false);
+    scrollToBottom();
+  };
+
+  const deleteChatSession = async (sessionId: string) => {
+    try {
+      const updatedSessions = chatSessions.filter((s) => s.id !== sessionId);
+      await AsyncStorage.setItem(
+        "chatSessions",
+        JSON.stringify(updatedSessions),
+      );
+      setChatSessions(updatedSessions);
+
+      if (currentSessionId === sessionId) {
+        setMessages([]);
+        setCurrentSessionId(null);
+      }
+    } catch (error) {
+      console.error("Error deleting chat session:", error);
+    }
+  };
+
+  const retryMessage = async (messageId: string, originalText: string) => {
+    // Mark message as retrying
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId ? { ...msg, isRetrying: true } : msg,
+      ),
+    );
+
+    // Remove the error message and retry
+    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+
+    // Resend the message
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: originalText,
+      isUser: true,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    await sendMessageToAPI(originalText);
   };
 
   useEffect(() => {
     // Show AI popup modal when tools page is accessed
     setShowAIPopupModal(true);
+    loadChatSessions();
 
-    // Send initial "Hi!" message to LLM to initiate conversation
-    sendInitialMessage();
+    // Handle app state changes for auto-save
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange,
+    );
+
+    return () => {
+      subscription.remove();
+      // Save current session when component unmounts
+      if (currentSessionId && messages.length > 0) {
+        saveCurrentSession();
+      }
+    };
   }, []);
 
-  const sendInitialMessage = () => {
-    const initialMessage: Message = {
-      id: Date.now().toString(),
-      text: "Hello! I'm Luma, your AI companion. How can I help you today?",
-      isUser: false,
-      timestamp: new Date(),
-    };
-
-    setMessages([initialMessage]);
-
-    // Scroll to bottom after adding AI message
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
+  useEffect(() => {
+    // Auto-save when messages change
+    if (currentSessionId && messages.length > 0) {
+      const timer = setTimeout(() => {
+        saveCurrentSession();
+      }, 1000); // Debounce for 1 second
+      return () => clearTimeout(timer);
+    }
+  }, [messages]);
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
 
+    const messageText = inputText.trim();
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: messageText,
       isUser: true,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText("");
-    setIsLoading(true);
-
-    // Scroll to bottom after adding user message
     scrollToBottom();
+
+    await sendMessageToAPI(messageText);
+  };
+
+  const sendMessageToAPI = async (messageText: string) => {
+    setIsLoading(true);
+    setIsTyping(true);
+
+    // Start typing animation
+    typingDotsAnimation.value = withSequence(
+      withTiming(1, { duration: 500 }),
+      withTiming(0, { duration: 500 }),
+      withTiming(1, { duration: 500 }),
+    );
 
     try {
       const response = await fetch(
@@ -163,7 +417,7 @@ export default function ToolsScreen() {
             messages: [
               {
                 role: "user",
-                content: userMessage.text,
+                content: messageText,
               },
             ],
           }),
@@ -171,7 +425,6 @@ export default function ToolsScreen() {
       );
 
       const data = await response.json();
-      console.log("API Response:", data); // Debug log
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -180,11 +433,10 @@ export default function ToolsScreen() {
           "Sorry, I couldn't process your request.",
         isUser: false,
         timestamp: new Date(),
+        isError: !data.choices?.[0]?.message?.content,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-
-      // Scroll to bottom after adding AI message
       scrollToBottom();
     } catch (error) {
       console.error("Error sending message:", error);
@@ -193,19 +445,119 @@ export default function ToolsScreen() {
         text: "Sorry, I'm having trouble connecting right now. Please try again.",
         isUser: false,
         timestamp: new Date(),
+        isError: true,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
   return (
     <TouchableWithoutFeedback onPress={dismissKeyboard}>
-      <ThemedView style={[styles.container, { paddingTop: insets.top + 28 }]}>
-        <ThemedText type="defaultSemiBold" style={styles.title}>
-          Luma
-        </ThemedText>
+      <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+        {/* Header with Menu and Action buttons */}
+        <View style={[styles.header, { paddingTop: 12 }]}>
+          <View style={styles.headerLeft}>
+            <Pressable
+              style={[styles.menuButton, isDark && styles.menuButtonDark]}
+              onPress={() => setShowMenu(!showMenu)}
+            >
+              <HugeiconsIcon
+                icon={MoreVerticalIcon}
+                size={24}
+                color={isDark ? "#FFFFFF" : "#000000"}
+              />
+            </Pressable>
+
+            {/* Dropdown Menu */}
+            {showMenu && (
+              <View
+                style={[styles.dropdownMenu, isDark && styles.dropdownMenuDark]}
+              >
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setShowMenu(false);
+                    setShowChatHistory(true);
+                  }}
+                >
+                  <HugeiconsIcon
+                    icon={ClockIcon}
+                    size={20}
+                    color={isDark ? "#FFFFFF" : "#007AFF"}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.dropdownItemText,
+                      isDark && styles.dropdownItemTextDark,
+                    ]}
+                  >
+                    Chat History
+                  </ThemedText>
+                </Pressable>
+
+                <View
+                  style={[
+                    styles.dropdownDivider,
+                    isDark && styles.dropdownDividerDark,
+                  ]}
+                />
+
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setShowMenu(false);
+                    setShowCrisisSupport(true);
+                  }}
+                >
+                  <HugeiconsIcon
+                    icon={CustomerSupportIcon}
+                    size={20}
+                    color={isDark ? "#4CAF50" : "#388E3C"}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.dropdownItemText,
+                      isDark && styles.dropdownItemTextDark,
+                    ]}
+                  >
+                    Crisis Support
+                  </ThemedText>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.headerRight}>
+            {messages.length > 0 && (
+              <>
+                <Pressable
+                  style={[styles.iconButton, isDark && styles.iconButtonDark]}
+                  onPress={clearAllMessages}
+                >
+                  <HugeiconsIcon
+                    icon={Delete02Icon}
+                    size={22}
+                    color={isDark ? "#FF6B6B" : "#FF3B30"}
+                  />
+                </Pressable>
+
+                <Pressable
+                  style={[styles.iconButton, isDark && styles.iconButtonDark]}
+                  onPress={endAndSaveChat}
+                >
+                  <HugeiconsIcon
+                    icon={FloppyDiskIcon}
+                    size={22}
+                    color={isDark ? "#FFFFFF" : "#388E3C"}
+                  />
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
 
         <KeyboardAwareScrollView
           ref={keyboardAwareScrollRef}
@@ -219,38 +571,165 @@ export default function ToolsScreen() {
         >
           {messages.length === 0 && (
             <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyText}>
-                Start a conversation with Luma to get help with your thoughts
-                and questions.
+              <View style={styles.emptyStateIcon}>
+                <HugeiconsIcon
+                  icon={BubbleChatIcon}
+                  size={48}
+                  color={isDark ? "#FFFFFF" : "#007AFF"}
+                />
+              </View>
+              <ThemedText type="defaultSemiBold" style={styles.emptyStateTitle}>
+                Start a conversation with Luma
               </ThemedText>
+              <ThemedText style={styles.emptyText}>
+                Your AI companion is here to support you. Try asking about:
+              </ThemedText>
+
+              <View style={styles.conversationStarters}>
+                {[
+                  "How can I manage cravings today?",
+                  "I'm feeling stressed, what should I do?",
+                  "Help me set a goal for this week",
+                  "What are some healthy coping strategies?",
+                ].map((starter, index) => (
+                  <Pressable
+                    key={index}
+                    style={[
+                      styles.starterButton,
+                      isDark && styles.starterButtonDark,
+                      isLoading && styles.starterButtonDisabled,
+                    ]}
+                    onPress={async () => {
+                      if (isLoading) return; // Prevent multiple requests
+
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+                      // Create and add user message immediately
+                      const userMessage: Message = {
+                        id: Date.now().toString(),
+                        text: starter,
+                        isUser: true,
+                        timestamp: new Date(),
+                      };
+
+                      setMessages((prev) => [...prev, userMessage]);
+                      scrollToBottom();
+
+                      // Send to API
+                      await sendMessageToAPI(starter);
+                    }}
+                    disabled={isLoading}
+                  >
+                    <ThemedText
+                      style={[
+                        styles.starterText,
+                        isDark && styles.starterTextDark,
+                      ]}
+                    >
+                      {starter}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           )}
 
           {messages.map((message) => (
-            <View
+            <Pressable
               key={message.id}
+              onPress={() => {
+                setShowTimestamp(
+                  showTimestamp === message.id ? null : message.id,
+                );
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              onLongPress={() => {
+                setSelectedMessage(message.id);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+                const options = ["Copy"];
+                if (!message.isUser) {
+                  if (message.isError) {
+                    options.push("Retry");
+                  }
+                  options.push("Delete");
+                }
+
+                Alert.alert(
+                  "Message Options",
+                  message.text.length > 50
+                    ? message.text.substring(0, 50) + "..."
+                    : message.text,
+                  [
+                    ...options.map((option) => ({
+                      text: option,
+                      onPress: () => {
+                        switch (option) {
+                          case "Copy":
+                            copyMessage(message.text);
+                            break;
+                          case "Retry":
+                            // Find the user message that triggered this response
+                            const userMessageIndex =
+                              messages.findIndex((m) => m.id === message.id) -
+                              1;
+                            const userMessage = messages[userMessageIndex];
+                            if (userMessage && userMessage.isUser) {
+                              retryMessage(message.id, userMessage.text);
+                            }
+                            break;
+                          case "Delete":
+                            deleteMessage(message.id);
+                            break;
+                        }
+                        setSelectedMessage(null);
+                      },
+                    })),
+                    {
+                      text: "Cancel",
+                      style: "cancel",
+                      onPress: () => setSelectedMessage(null),
+                    },
+                  ],
+                );
+              }}
               style={[
                 styles.messageContainer,
                 message.isUser ? styles.userMessage : styles.aiMessage,
+                selectedMessage === message.id && styles.selectedMessage,
               ]}
             >
               <View style={styles.messageHeader}>
                 <View
                   style={[
                     styles.indicator,
-                    message.isUser ? styles.userIndicator : styles.aiIndicator,
+                    message.isUser
+                      ? styles.userIndicator
+                      : message.isError
+                        ? styles.errorIndicator
+                        : styles.aiIndicator,
                   ]}
                 />
                 <ThemedText style={styles.senderLabel}>
                   {message.isUser ? "You" : "Luma"}
                 </ThemedText>
+                {showTimestamp === message.id && (
+                  <ThemedText style={styles.timestamp}>
+                    {getRelativeTime(message.timestamp)}
+                  </ThemedText>
+                )}
               </View>
               <View
                 style={[
                   styles.messageBubble,
                   message.isUser
                     ? styles.userBubble
-                    : { backgroundColor: isDark ? "#2C2C2E" : "#F2F2F7" },
+                    : message.isError
+                      ? [
+                          styles.errorBubble,
+                          { backgroundColor: isDark ? "#3A1A1A" : "#FFF0F0" },
+                        ]
+                      : { backgroundColor: isDark ? "#2C2C2E" : "#F2F2F7" },
                 ]}
               >
                 <ThemedText
@@ -258,19 +737,34 @@ export default function ToolsScreen() {
                     styles.messageText,
                     message.isUser
                       ? styles.userMessageText
-                      : { color: isDark ? "#FFFFFF" : "#000000" },
+                      : message.isError
+                        ? [
+                            styles.errorMessageText,
+                            { color: isDark ? "#FF6B6B" : "#D32F2F" },
+                          ]
+                        : { color: isDark ? "#FFFFFF" : "#000000" },
                   ]}
                 >
                   {message.text}
                 </ThemedText>
+                {message.isError && (
+                  <ThemedText
+                    style={[
+                      styles.errorHint,
+                      { color: isDark ? "#FF9999" : "#B71C1C" },
+                    ]}
+                  >
+                    Tap and hold to retry
+                  </ThemedText>
+                )}
               </View>
-            </View>
+            </Pressable>
           ))}
 
           {isLoading && (
             <View style={styles.loadingContainer}>
               <View style={styles.messageHeader}>
-                <View style={styles.aiIndicator} />
+                <View style={[styles.indicator, styles.aiIndicator]} />
                 <ThemedText style={styles.senderLabel}>Luma</ThemedText>
               </View>
               <View
@@ -279,17 +773,27 @@ export default function ToolsScreen() {
                   { backgroundColor: isDark ? "#2C2C2E" : "#F2F2F7" },
                 ]}
               >
-                <ActivityIndicator
-                  size="small"
-                  color={isDark ? "#8E8E93" : "#666"}
-                />
+                <View style={styles.typingIndicator}>
+                  {[0, 1, 2].map((index) => (
+                    <Animated.View
+                      key={index}
+                      style={[
+                        styles.typingDot,
+                        {
+                          backgroundColor: isDark ? "#8E8E93" : "#666",
+                        },
+                        typingDotAnimatedStyle,
+                      ]}
+                    />
+                  ))}
+                </View>
                 <ThemedText
                   style={[
                     styles.loadingText,
                     { color: isDark ? "#8E8E93" : "#666" },
                   ]}
                 >
-                  Thinking...
+                  {isTyping ? "Typing..." : "Thinking..."}
                 </ThemedText>
               </View>
             </View>
@@ -374,6 +878,226 @@ export default function ToolsScreen() {
           visible={showAIPopupModal}
           onClose={() => setShowAIPopupModal(false)}
         />
+
+        {/* Chat History Modal */}
+        <Modal
+          visible={showChatHistory}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowChatHistory(false)}
+        >
+          <ThemedView
+            style={[styles.modalContainer, isDark && styles.modalContainerDark]}
+          >
+            <View
+              style={[
+                styles.modalHeader,
+                isDark && styles.modalHeaderDark,
+                { paddingTop: 15 },
+              ]}
+            >
+              <ThemedText type="subtitle" style={styles.modalTitle}>
+                Chat History
+              </ThemedText>
+              <Pressable
+                onPress={() => setShowChatHistory(false)}
+                style={[
+                  styles.modalCloseButton,
+                  isDark && styles.modalCloseButtonDark,
+                ]}
+              >
+                <ThemedText style={styles.modalCloseText}>✕</ThemedText>
+              </Pressable>
+            </View>
+
+            {chatSessions.length === 0 ? (
+              <View style={styles.emptyHistoryContainer}>
+                <ThemedText style={styles.emptyHistoryText}>
+                  No saved conversations yet
+                </ThemedText>
+                <ThemedText style={styles.emptyHistorySubtext}>
+                  Your conversations will appear here when you save them
+                </ThemedText>
+              </View>
+            ) : (
+              <FlatList
+                data={chatSessions}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={[
+                      styles.chatSessionItem,
+                      isDark && styles.chatSessionItemDark,
+                    ]}
+                    onPress={() => loadChatSession(item)}
+                    onLongPress={() => {
+                      Alert.alert(
+                        "Delete Chat",
+                        "Are you sure you want to delete this conversation?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => deleteChatSession(item.id),
+                          },
+                        ],
+                      );
+                    }}
+                  >
+                    <View style={styles.chatSessionContent}>
+                      <ThemedText style={styles.chatSessionTitle}>
+                        {item.title}
+                      </ThemedText>
+                      <ThemedText style={styles.chatSessionDate}>
+                        {getRelativeTime(item.timestamp)} •{" "}
+                        {item.messages.length} messages
+                      </ThemedText>
+                    </View>
+                    {item.id === currentSessionId && (
+                      <View style={styles.activeIndicator} />
+                    )}
+                  </Pressable>
+                )}
+                contentContainerStyle={styles.historyListContent}
+              />
+            )}
+          </ThemedView>
+        </Modal>
+
+        {/* Crisis Support Modal */}
+        <Modal
+          visible={showCrisisSupport}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowCrisisSupport(false)}
+        >
+          <ThemedView
+            style={[styles.modalContainer, isDark && styles.modalContainerDark]}
+          >
+            <View
+              style={[
+                styles.modalHeader,
+                isDark && styles.modalHeaderDark,
+                { paddingTop: 15 },
+              ]}
+            >
+              <ThemedText type="subtitle" style={styles.modalTitle}>
+                Important Information
+              </ThemedText>
+              <Pressable
+                onPress={() => setShowCrisisSupport(false)}
+                style={[
+                  styles.modalCloseButton,
+                  isDark && styles.modalCloseButtonDark,
+                ]}
+              >
+                <ThemedText style={styles.modalCloseText}>✕</ThemedText>
+              </Pressable>
+            </View>
+
+            <ScrollView
+              style={styles.crisisSupportContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View
+                style={[
+                  styles.disclaimerSection,
+                  isDark && styles.disclaimerSectionDark,
+                ]}
+              >
+                <ThemedText
+                  type="defaultSemiBold"
+                  style={styles.disclaimerTitle}
+                >
+                  About Luma
+                </ThemedText>
+                <ThemedText style={styles.disclaimerText}>
+                  Luma is an AI companion designed to support you on your
+                  journey. While Luma can provide helpful guidance and coping
+                  strategies, it's important to understand:
+                </ThemedText>
+
+                <View style={styles.disclaimerPoints}>
+                  <View style={styles.disclaimerPoint}>
+                    <ThemedText style={styles.disclaimerBullet}>•</ThemedText>
+                    <ThemedText style={styles.disclaimerPointText}>
+                      Luma is not a replacement for professional medical advice,
+                      diagnosis, or treatment
+                    </ThemedText>
+                  </View>
+                  <View style={styles.disclaimerPoint}>
+                    <ThemedText style={styles.disclaimerBullet}>•</ThemedText>
+                    <ThemedText style={styles.disclaimerPointText}>
+                      Always seek the advice of qualified health providers with
+                      any questions you may have
+                    </ThemedText>
+                  </View>
+                  <View style={styles.disclaimerPoint}>
+                    <ThemedText style={styles.disclaimerBullet}>•</ThemedText>
+                    <ThemedText style={styles.disclaimerPointText}>
+                      In case of emergency, please contact emergency services
+                      immediately
+                    </ThemedText>
+                  </View>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.crisisSupportSection,
+                  isDark && styles.crisisSupportSectionDark,
+                ]}
+              >
+                <ThemedText
+                  type="defaultSemiBold"
+                  style={styles.crisisSupportTitle}
+                >
+                  24/7 Crisis Support
+                </ThemedText>
+                <ThemedText style={styles.crisisSupportSubtext}>
+                  If you're having thoughts of self-harm or need immediate
+                  support, help is available right now.
+                </ThemedText>
+
+                <View style={styles.crisisButtons}>
+                  <Pressable
+                    style={[styles.crisisButton, styles.crisisCallButton]}
+                    onPress={() => Linking.openURL("tel:988")}
+                  >
+                    <HugeiconsIcon
+                      icon={Call02Icon}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                    <ThemedText style={styles.crisisButtonText}>
+                      Call 988
+                    </ThemedText>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.crisisButton, styles.crisisTextButton]}
+                    onPress={() => Linking.openURL("sms:988")}
+                  >
+                    <HugeiconsIcon
+                      icon={Message01Icon}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                    <ThemedText style={styles.crisisButtonText}>
+                      Text 988
+                    </ThemedText>
+                  </Pressable>
+                </View>
+
+                <ThemedText style={styles.crisisAdditionalInfo}>
+                  The 988 Suicide & Crisis Lifeline provides free and
+                  confidential support 24/7
+                </ThemedText>
+              </View>
+            </ScrollView>
+          </ThemedView>
+        </Modal>
       </ThemedView>
     </TouchableWithoutFeedback>
   );
@@ -383,11 +1107,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-  },
-  title: {
-    fontSize: 28,
-    lineHeight: 28,
-    marginBottom: 20,
   },
   messagesContainer: {
     flex: 1,
@@ -400,21 +1119,76 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 40,
-    paddingVertical: 60,
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(0, 122, 255, 0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptyText: {
     textAlign: "center",
     opacity: 0.6,
     lineHeight: 22,
+    marginBottom: 24,
+  },
+  conversationStarters: {
+    width: "100%",
+    gap: 12,
+  },
+  starterButton: {
+    backgroundColor: "rgba(0, 122, 255, 0.08)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0, 122, 255, 0.15)",
+  },
+  starterButtonDark: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.15)",
+  },
+  starterButtonDisabled: {
+    opacity: 0.5,
+  },
+  starterText: {
+    fontSize: 15,
+    textAlign: "center",
+    color: "#007AFF",
+    fontWeight: "500",
+  },
+  starterTextDark: {
+    color: "#FFFFFF",
   },
   messageContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  selectedMessage: {
+    backgroundColor: "rgba(0, 122, 255, 0.05)",
+    borderRadius: 12,
+    padding: 8,
+    marginHorizontal: -8,
   },
   messageHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 6,
+    marginBottom: 4,
+  },
+  timestamp: {
+    fontSize: 11,
+    opacity: 0.5,
+    marginLeft: 8,
+    fontWeight: "500",
   },
   indicator: {
     width: 8,
@@ -427,6 +1201,9 @@ const styles = StyleSheet.create({
   },
   aiIndicator: {
     backgroundColor: "#FF6B35",
+  },
+  errorIndicator: {
+    backgroundColor: "#FF3B30",
   },
   senderLabel: {
     fontSize: 12,
@@ -452,6 +1229,10 @@ const styles = StyleSheet.create({
   aiBubble: {
     // Dynamic background color handled inline
   },
+  errorBubble: {
+    borderWidth: 1,
+    borderColor: "rgba(255, 59, 48, 0.2)",
+  },
   messageText: {
     fontSize: 16,
     lineHeight: 22,
@@ -462,8 +1243,17 @@ const styles = StyleSheet.create({
   aiMessageText: {
     // Dynamic text color handled inline
   },
+  errorMessageText: {
+    fontWeight: "500",
+  },
+  errorHint: {
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: "italic",
+    opacity: 0.8,
+  },
   loadingContainer: {
-    marginBottom: 16,
+    marginBottom: 8,
     alignItems: "flex-start",
   },
   loadingBubble: {
@@ -477,6 +1267,17 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     marginLeft: 8,
+  },
+  typingIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginHorizontal: 2,
   },
   inputContainer: {
     paddingTop: 10,
@@ -545,5 +1346,265 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "600",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 0,
+    paddingBottom: 16,
+    marginBottom: 8,
+  },
+  headerLeft: {
+    position: "relative",
+    zIndex: 10,
+  },
+  headerRight: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+  },
+  menuButtonDark: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  dropdownMenu: {
+    position: "absolute",
+    top: 48,
+    left: 0,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    minWidth: 180,
+    paddingVertical: 8,
+  },
+  dropdownMenuDark: {
+    backgroundColor: "#2C2C2E",
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    fontFamily: FontFamily.medium,
+    color: "#000000",
+  },
+  dropdownItemTextDark: {
+    color: "#FFFFFF",
+  },
+  dropdownDivider: {
+    height: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.1)",
+    marginVertical: 4,
+  },
+  dropdownDividerDark: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.05)",
+  },
+  iconButtonDark: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  modalContainerDark: {
+    backgroundColor: "#151718",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.1)",
+  },
+  modalHeaderDark: {
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: FontFamily.bold,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.06)",
+  },
+  modalCloseButtonDark: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+  },
+  emptyHistoryContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyHistoryText: {
+    fontSize: 18,
+    fontFamily: FontFamily.medium,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  emptyHistorySubtext: {
+    fontSize: 14,
+    opacity: 0.6,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  historyListContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 40,
+  },
+  chatSessionItem: {
+    backgroundColor: "#F6F7F9",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  chatSessionItemDark: {
+    backgroundColor: "#2C2C2E",
+  },
+  chatSessionContent: {
+    flex: 1,
+  },
+  chatSessionTitle: {
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+    marginBottom: 4,
+  },
+  chatSessionDate: {
+    fontSize: 13,
+    opacity: 0.6,
+  },
+  activeIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4CAF50",
+    marginLeft: 12,
+  },
+  crisisSupportContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  disclaimerSection: {
+    marginBottom: 32,
+  },
+  disclaimerSectionDark: {
+    // Add if needed
+  },
+  disclaimerTitle: {
+    fontSize: 18,
+    marginBottom: 12,
+    fontFamily: FontFamily.bold,
+  },
+  disclaimerText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+    opacity: 0.8,
+  },
+  disclaimerPoints: {
+    gap: 12,
+  },
+  disclaimerPoint: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  disclaimerBullet: {
+    fontSize: 16,
+    opacity: 0.6,
+  },
+  disclaimerPointText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.7,
+  },
+  crisisSupportSection: {
+    backgroundColor: "rgba(76, 175, 80, 0.08)",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 40,
+  },
+  crisisSupportSectionDark: {
+    backgroundColor: "rgba(76, 175, 80, 0.15)",
+  },
+  crisisSupportTitle: {
+    fontSize: 18,
+    marginBottom: 8,
+    fontFamily: FontFamily.bold,
+  },
+  crisisSupportSubtext: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 20,
+    opacity: 0.8,
+  },
+  crisisButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 16,
+  },
+  crisisButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  crisisCallButton: {
+    backgroundColor: "#4CAF50",
+  },
+  crisisTextButton: {
+    backgroundColor: "#388E3C",
+  },
+  crisisButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+  },
+  crisisAdditionalInfo: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+    opacity: 0.7,
   },
 });

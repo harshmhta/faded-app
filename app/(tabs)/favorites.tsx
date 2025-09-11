@@ -187,7 +187,7 @@ export default function SettingsScreen() {
         <ThemedView style={styles.footer}>
           <ThemedText style={styles.logoText}>faded</ThemedText>
           <ThemedText style={styles.versionText}>
-            Version 0.0.2 (alpha)
+            Version 0.1.0 (alpha)
           </ThemedText>
           <ThemedView style={styles.footerLinks}>
             <TouchableOpacity>
