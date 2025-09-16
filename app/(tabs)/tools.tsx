@@ -29,6 +29,7 @@ import {
   Linking,
   Modal,
   Pressable,
+  Animated as RNAnimated,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -65,6 +66,75 @@ interface ChatSession {
   title: string;
   timestamp: Date;
   isActive?: boolean;
+}
+
+interface PulsatingIndicatorProps {
+  color: string;
+}
+
+function PulsatingIndicator({ color }: PulsatingIndicatorProps) {
+  const pulseAnim = useRef(new RNAnimated.Value(1)).current;
+  const opacityAnim = useRef(new RNAnimated.Value(0.15)).current;
+
+  useEffect(() => {
+    const pulse = () => {
+      RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.parallel([
+            RNAnimated.timing(pulseAnim, {
+              toValue: 1.1,
+              duration: 1200,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(opacityAnim, {
+              toValue: 0.4,
+              duration: 1200,
+              useNativeDriver: true,
+            }),
+          ]),
+          RNAnimated.parallel([
+            RNAnimated.timing(pulseAnim, {
+              toValue: 1,
+              duration: 1200,
+              useNativeDriver: true,
+            }),
+            RNAnimated.timing(opacityAnim, {
+              toValue: 0.15,
+              duration: 1200,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]),
+      ).start();
+    };
+
+    pulse();
+  }, [pulseAnim, opacityAnim]);
+
+  return (
+    <View style={styles.indicatorContainer}>
+      {/* Glow effect */}
+      <RNAnimated.View
+        style={[
+          styles.glowEffect,
+          {
+            backgroundColor: color,
+            opacity: opacityAnim,
+            transform: [{ scale: pulseAnim }],
+          },
+        ]}
+      />
+      {/* Main dot */}
+      <View
+        style={[
+          styles.pulsatingIndicator,
+          {
+            backgroundColor: color,
+          },
+        ]}
+      />
+    </View>
+  );
 }
 
 export default function ToolsScreen() {
@@ -1045,55 +1115,79 @@ export default function ToolsScreen() {
 
               <View
                 style={[
-                  styles.crisisSupportSection,
-                  isDark && styles.crisisSupportSectionDark,
+                  styles.crisisCard,
+                  {
+                    borderColor: isDark ? "#4CAF50" : "#E8F5E8",
+                    backgroundColor: isDark ? "#1A2A1A" : "#F8FFF8",
+                  },
                 ]}
               >
-                <ThemedText
-                  type="defaultSemiBold"
-                  style={styles.crisisSupportTitle}
-                >
-                  24/7 Crisis Support
+                <View style={styles.crisisHeaderRow}>
+                  <View style={styles.crisisHeaderLeft}>
+                    <PulsatingIndicator color="#4CAF50" />
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={styles.crisisCardTitle}
+                    >
+                      Crisis Support Available
+                    </ThemedText>
+                  </View>
+                  <View style={styles.crisisSubtitleBadge}>
+                    <ThemedText style={styles.crisisSubtitle}>24/7</ThemedText>
+                  </View>
+                </View>
+                <ThemedText style={styles.crisisCardContent}>
+                  If you're having thoughts of self-harm, help is available
+                  right now.
                 </ThemedText>
-                <ThemedText style={styles.crisisSupportSubtext}>
-                  If you're having thoughts of self-harm or need immediate
-                  support, help is available right now.
-                </ThemedText>
-
                 <View style={styles.crisisButtons}>
                   <Pressable
-                    style={[styles.crisisButton, styles.crisisCallButton]}
+                    style={[
+                      styles.crisisButton,
+                      isDark && styles.crisisButtonDark,
+                    ]}
                     onPress={() => Linking.openURL("tel:988")}
                   >
-                    <HugeiconsIcon
-                      icon={Call02Icon}
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                    <ThemedText style={styles.crisisButtonText}>
-                      Call 988
-                    </ThemedText>
+                    <View style={styles.crisisButtonContent}>
+                      <HugeiconsIcon
+                        icon={Call02Icon}
+                        size={16}
+                        color="#FFFFFF"
+                      />
+                      <ThemedText
+                        style={[
+                          styles.crisisButtonText,
+                          isDark && styles.crisisButtonTextDark,
+                        ]}
+                      >
+                        Call for help
+                      </ThemedText>
+                    </View>
                   </Pressable>
-
                   <Pressable
-                    style={[styles.crisisButton, styles.crisisTextButton]}
+                    style={[
+                      styles.crisisButton,
+                      isDark && styles.crisisButtonDark,
+                    ]}
                     onPress={() => Linking.openURL("sms:988")}
                   >
-                    <HugeiconsIcon
-                      icon={Message01Icon}
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                    <ThemedText style={styles.crisisButtonText}>
-                      Text 988
-                    </ThemedText>
+                    <View style={styles.crisisButtonContent}>
+                      <HugeiconsIcon
+                        icon={Message01Icon}
+                        size={16}
+                        color="#FFFFFF"
+                      />
+                      <ThemedText
+                        style={[
+                          styles.crisisButtonText,
+                          isDark && styles.crisisButtonTextDark,
+                        ]}
+                      >
+                        Text for help
+                      </ThemedText>
+                    </View>
                   </Pressable>
                 </View>
-
-                <ThemedText style={styles.crisisAdditionalInfo}>
-                  The 988 Suicide & Crisis Lifeline provides free and
-                  confidential support 24/7
-                </ThemedText>
               </View>
             </ScrollView>
           </ThemedView>
@@ -1556,55 +1650,98 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     opacity: 0.7,
   },
-  crisisSupportSection: {
-    backgroundColor: "rgba(76, 175, 80, 0.08)",
+  crisisCard: {
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 40,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
   },
-  crisisSupportSectionDark: {
-    backgroundColor: "rgba(76, 175, 80, 0.15)",
-  },
-  crisisSupportTitle: {
-    fontSize: 18,
+  crisisHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
-    fontFamily: FontFamily.bold,
   },
-  crisisSupportSubtext: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 20,
+  crisisHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  crisisCardTitle: {
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+  },
+  crisisSubtitleBadge: {
+    backgroundColor: "rgba(76, 175, 80, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  crisisSubtitle: {
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
+    color: "#4CAF50",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  crisisCardContent: {
+    fontSize: 14,
+    lineHeight: 20,
     opacity: 0.8,
+    fontFamily: FontFamily.regular,
+    marginBottom: 16,
   },
   crisisButtons: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 16,
   },
   crisisButton: {
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
     flex: 1,
+  },
+  crisisButtonDark: {
+    backgroundColor: "#388E3C",
+  },
+  crisisButtonContent: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
     gap: 8,
   },
-  crisisCallButton: {
-    backgroundColor: "#4CAF50",
-  },
-  crisisTextButton: {
-    backgroundColor: "#388E3C",
-  },
   crisisButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: FontFamily.medium,
+    color: "#FFFFFF",
   },
-  crisisAdditionalInfo: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: "center",
-    opacity: 0.7,
+  crisisButtonTextDark: {
+    color: "#FFFFFF",
+  },
+  indicatorContainer: {
+    position: "relative",
+    width: 14,
+    height: 14,
+    marginRight: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pulsatingIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 2,
+  },
+  glowEffect: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    zIndex: 1,
   },
 });

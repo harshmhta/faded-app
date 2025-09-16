@@ -56,7 +56,7 @@ export default function DashboardHeader({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 8,
   },
   topRow: {
     flexDirection: "row",

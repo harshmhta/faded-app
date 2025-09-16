@@ -6,9 +6,8 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import {
   ArrowUp01Icon,
+  ArrowUpRight03Icon,
   Comment01Icon,
-  LinkIcon,
-  ShareIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import React, { useEffect, useState } from "react";
@@ -141,12 +140,6 @@ export function RedditPostModal({
     }
   };
 
-  const handleShare = () => {
-    if (post) {
-      Linking.openURL(`https://reddit.com${post.permalink}`);
-    }
-  };
-
   const renderComment = (comment: RedditComment) => {
     const borderColor = isDark ? "#2A2A2A" : "#E6E8EB";
     const commentBackground = isDark ? "#181A1B" : "#F6F7F9";
@@ -209,29 +202,6 @@ export function RedditPostModal({
         <View
           style={[styles.header, { paddingTop: 15 }, { paddingBottom: 15 }]}
         >
-          <View style={styles.headerActions}>
-            <Pressable
-              onPress={handleOpenInReddit}
-              style={[styles.actionButton, isDark && styles.actionButtonDark]}
-            >
-              <HugeiconsIcon
-                icon={LinkIcon}
-                size={18}
-                color={isDark ? "#FFFFFF" : "#333333"}
-              />
-            </Pressable>
-            <Pressable
-              onPress={handleShare}
-              style={[styles.actionButton, isDark && styles.actionButtonDark]}
-            >
-              <HugeiconsIcon
-                icon={ShareIcon}
-                size={18}
-                color={isDark ? "#FFFFFF" : "#333333"}
-              />
-            </Pressable>
-          </View>
-
           <Pressable
             onPress={onClose}
             style={[styles.closeButton, isDark && styles.closeButtonDark]}
@@ -258,6 +228,17 @@ export function RedditPostModal({
                   {formatTimeAgo(post.created_utc)}
                 </ThemedText>
               </View>
+              <Pressable
+                onPress={handleOpenInReddit}
+                style={styles.redditLinkContainer}
+              >
+                <ThemedText style={styles.redditLinkText}>Reddit</ThemedText>
+                <HugeiconsIcon
+                  icon={ArrowUpRight03Icon}
+                  size={14}
+                  color="#FF4500"
+                />
+              </Pressable>
             </View>
 
             {/* Post Title */}
@@ -323,7 +304,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 10,
@@ -345,21 +326,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FontFamily.medium,
   },
-  headerActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.06)",
-  },
-  actionButtonDark: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
   scrollView: {
     flex: 1,
   },
@@ -373,11 +339,15 @@ const styles = StyleSheet.create({
   },
   postHeader: {
     marginBottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   authorInfo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    flex: 1,
   },
   author: {
     fontSize: 14,
@@ -475,5 +445,15 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     padding: 40,
     fontFamily: FontFamily.regular,
+  },
+  redditLinkContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  redditLinkText: {
+    fontSize: 14,
+    fontFamily: FontFamily.medium,
+    color: "#FF4500",
   },
 });
