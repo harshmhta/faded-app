@@ -16,6 +16,7 @@ export default {
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
       },
+      icon: "faded.icon"
     },
     android: {
       adaptiveIcon: {
@@ -34,6 +35,8 @@ export default {
       "expo-router",
       "expo-secure-store",
       "expo-dev-client",
+      "expo-font",
+      "expo-web-browser",
       [
         "expo-splash-screen",
         {
