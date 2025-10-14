@@ -5,15 +5,18 @@ import { Image } from "expo-image";
 import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ConsumptionStatus } from "./DailyConsumptionLogger";
 import { ThemedText } from "./ThemedText";
 import WeeklyCalendar from "./WeeklyCalendar";
 
 interface DashboardHeaderProps {
   parentScrollRef?: React.RefObject<ScrollView | null>;
+  consumptionStatus?: ConsumptionStatus | null;
 }
 
 export default function DashboardHeader({
   parentScrollRef,
+  consumptionStatus,
 }: DashboardHeaderProps) {
   const textColor = useThemeColor({}, "text");
   const colorScheme = useColorScheme() ?? "light";
@@ -48,6 +51,7 @@ export default function DashboardHeader({
       <WeeklyCalendar
         onDateSelect={handleDateSelect}
         parentScrollRef={parentScrollRef}
+        consumptionStatus={consumptionStatus}
       />
     </View>
   );

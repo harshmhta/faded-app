@@ -1,6 +1,11 @@
 import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import {
+  CancelCircleIcon,
+  CheckmarkCircleIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react-native";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -10,6 +15,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { ConsumptionStatus } from "./DailyConsumptionLogger";
 import { ThemedText } from "./ThemedText";
 
 const { width: screenWidth } = Dimensions.get("window");
@@ -19,11 +25,13 @@ const WEEK_SPACING = 50; // Extra spacing between weeks
 interface WeeklyCalendarProps {
   onDateSelect?: (date: Date) => void;
   parentScrollRef?: React.RefObject<ScrollView | null>;
+  consumptionStatus?: ConsumptionStatus | null;
 }
 
 export default function WeeklyCalendar({
   onDateSelect,
   parentScrollRef,
+  consumptionStatus,
 }: WeeklyCalendarProps) {
   const textColor = useThemeColor({}, "text");
   const colorScheme = useColorScheme() ?? "light";
@@ -65,6 +73,11 @@ export default function WeeklyCalendar({
   // Check if a date is today
   const isToday = (date: Date) => {
     return date.toDateString() === today.toDateString();
+  };
+
+  // Check if date matches consumption status date
+  const isConsumptionDate = (date: Date) => {
+    return consumptionStatus?.date === date.toDateString();
   };
 
   // Snap to current week on mount
@@ -109,6 +122,8 @@ export default function WeeklyCalendar({
         const date = weekDates[dayIndex];
         const isTodayDate = isToday(date);
         const isSelected = selectedDate?.toDateString() === date.toDateString();
+        const hasConsumptionStatus = isConsumptionDate(date);
+        const consumed = hasConsumptionStatus ? consumptionStatus?.consumed : null;
 
         return (
           <Pressable
@@ -129,17 +144,44 @@ export default function WeeklyCalendar({
                 styles.dayCircle,
                 isTodayDate ? styles.todayCircle : styles.otherDayCircle,
                 {
-                  borderColor: isTodayDate
+                  borderColor: hasConsumptionStatus
+                    ? consumed
+                      ? "#FF6B6B"
+                      : "#4CAF50"
+                    : isTodayDate
                     ? colorScheme === "dark"
                       ? "#FFFFFF"
                       : "#000000"
                     : "rgba(160, 160, 160, 0.6)",
+                  backgroundColor: hasConsumptionStatus
+                    ? consumed
+                      ? "#FF6B6B20"
+                      : "#4CAF5020"
+                    : "transparent",
                 },
               ]}
             >
-              <ThemedText style={[styles.dayLabel, { color: textColor }]}>
-                {dayLabel}
-              </ThemedText>
+              {hasConsumptionStatus ? (
+                consumed ? (
+                  <HugeiconsIcon
+                    icon={CancelCircleIcon}
+                    size={20}
+                    color="#FF6B6B"
+                    strokeWidth={2}
+                  />
+                ) : (
+                  <HugeiconsIcon
+                    icon={CheckmarkCircleIcon}
+                    size={20}
+                    color="#4CAF50"
+                    strokeWidth={2}
+                  />
+                )
+              ) : (
+                <ThemedText style={[styles.dayLabel, { color: textColor }]}>
+                  {dayLabel}
+                </ThemedText>
+              )}
             </View>
             <ThemedText
               style={[

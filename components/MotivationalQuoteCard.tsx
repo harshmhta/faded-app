@@ -2,11 +2,11 @@ import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import {
-  QuoteDownIcon,
-  QuoteUpIcon,
-  RefreshIcon,
-  Share01Icon,
-  SparklesIcon,
+    QuoteDownIcon,
+    QuoteUpIcon,
+    RefreshIcon,
+    Share01Icon,
+    SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { BlurView } from "expo-blur";
@@ -14,13 +14,13 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Platform,
-  Pressable,
-  Share,
-  StyleSheet,
-  View,
+    Animated,
+    Dimensions,
+    Platform,
+    Pressable,
+    Share,
+    StyleSheet,
+    View,
 } from "react-native";
 import { ThemedText } from "./ThemedText";
 

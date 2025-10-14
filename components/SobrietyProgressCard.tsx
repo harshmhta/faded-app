@@ -2,23 +2,23 @@ import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import {
-  CrownIcon,
-  FireIcon,
-  HeartAddIcon,
-  Leaf01Icon,
-  Medal01Icon,
-  ShieldIcon,
-  StarIcon,
-  Wav01Icon,
+    CrownIcon,
+    FireIcon,
+    HeartAddIcon,
+    Leaf01Icon,
+    Medal01Icon,
+    ShieldIcon,
+    StarIcon,
+    Wav01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import React from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import Svg, {
-  Circle,
-  Defs,
-  Stop,
-  LinearGradient as SvgLinearGradient,
+    Circle,
+    Defs,
+    Stop,
+    LinearGradient as SvgLinearGradient,
 } from "react-native-svg";
 import { ThemedText } from "./ThemedText";
 

@@ -8,12 +8,12 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
-  Animated,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
+    Animated,
+    Platform,
+    Pressable,
+    StyleSheet,
+    TextInput,
+    View,
 } from "react-native";
 import { ThemedText } from "./ThemedText";
 
