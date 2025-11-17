@@ -2,10 +2,10 @@ import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import {
-  AlertCircleIcon,
-  HeartAddIcon,
-  PencilEdit02Icon,
-  UserGroupIcon,
+    AlertCircleIcon,
+    HeartAddIcon,
+    PencilEdit02Icon,
+    UserGroupIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import * as Haptics from "expo-haptics";
@@ -77,7 +77,7 @@ export default function QuickActions() {
       icon: PencilEdit02Icon,
       label: "Check-in",
       color: "#4CAF50",
-      onPress: () => router.push("/category/mindfulness"),
+      onPress: () => router.push("/check-in"),
     },
     {
       icon: UserGroupIcon,

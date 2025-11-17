@@ -1,7 +1,7 @@
 import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider as ReactNavigationThemeProvider,
+    DarkTheme,
+    DefaultTheme,
+    ThemeProvider as ReactNavigationThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -17,6 +17,7 @@ import { StartupScreen } from "@/components/StartupScreen";
 import { Colors } from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import { CourseProgressProvider } from "@/contexts/CourseProgressContext";
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -49,11 +50,12 @@ export default function RootLayout() {
     <KeyboardProvider>
       <ThemeProvider>
         <AuthProvider>
-          <ThemeWrapper>
-            {showStartup ? (
-              <StartupScreen onAnimationComplete={handleStartupComplete} />
-            ) : (
-              <ProtectedRoute>
+          <CourseProgressProvider>
+            <ThemeWrapper>
+              {showStartup ? (
+                <StartupScreen onAnimationComplete={handleStartupComplete} />
+              ) : (
+                <ProtectedRoute>
                 <Stack
                   screenOptions={{
                     contentStyle: { backgroundColor: "transparent" },
@@ -79,6 +81,22 @@ export default function RootLayout() {
                     options={{ presentation: "modal", title: "Appearance" }}
                   />
                   <Stack.Screen
+                    name="check-in"
+                    options={{ 
+                      presentation: "modal",
+                      headerShown: false,
+                      animation: "slide_from_bottom"
+                    }}
+                  />
+                  <Stack.Screen
+                    name="sos-mirror"
+                    options={{ 
+                      presentation: "modal",
+                      headerShown: false,
+                      animation: "slide_from_bottom"
+                    }}
+                  />
+                  <Stack.Screen
                     name="category/[id]"
                     options={{ headerShown: false }}
                   />
@@ -86,10 +104,23 @@ export default function RootLayout() {
                     name="content/[id]"
                     options={{ headerShown: false }}
                   />
+                  <Stack.Screen
+                    name="chapter/[id]"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="lesson/[chapter]/[section]"
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="quiz/[id]"
+                    options={{ headerShown: false }}
+                  />
                 </Stack>
               </ProtectedRoute>
             )}
           </ThemeWrapper>
+          </CourseProgressProvider>
         </AuthProvider>
       </ThemeProvider>
     </KeyboardProvider>

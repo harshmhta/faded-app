@@ -8,7 +8,7 @@ import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
 import {
-  DiscoverCircleIcon,
+  BookOpen01Icon,
   Home01Icon,
   Leaf04Icon,
   Message01Icon,
@@ -74,12 +74,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="course"
         options={{
-          title: "Insights",
+          title: "Course",
           tabBarIcon: ({ color, focused }) => (
             <HugeiconsIcon
-              icon={DiscoverCircleIcon}
+              icon={BookOpen01Icon}
               size={26}
               color={color}
               strokeWidth={2.5}
@@ -91,7 +91,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="tools"
         options={{
-          title: "Tools",
+          title: "Luma",
           tabBarIcon: ({ color, focused }) => (
             <HugeiconsIcon
               icon={Leaf04Icon}

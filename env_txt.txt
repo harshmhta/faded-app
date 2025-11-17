@@ -1,0 +1,20 @@
+# Appwrite Configuration 
+EXPO_PUBLIC_APPWRITE_ENDPOINT=https://nyc.cloud.appwrite.io/v1
+EXPO_PUBLIC_APPWRITE_PROJECT_ID=fadedapp
+EXPO_PUBLIC_APPWRITE_PLATFORM=com.fadedapp
+EXPO_PUBLIC_APPWRITE_DATABASE_ID=faded-database
+EXPO_PUBLIC_APPWRITE_MOOD_COLLECTION_ID=mood-check-ins
+
+# EAS Configuration 
+EAS_PROJECT_ID=2c06e50d-86c6-4c22-bc62-b37820f8d99d
+
+# Google Sign-In Configuration 
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=352488828243-8kerhtlrblfh5bqdhtdalujasqt0bqvm.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=352488828243-nh41q0ou6alfr80ug89t9n3hbu3d6jad.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=352488828243-dbeojm3el1b52sp3iasmtnv23kcgn7hv.apps.googleusercontent.com
+
+# Environment 
+NODE_ENV=production
+
+# Digital Ocean Configuration
+EXPO_PUBLIC_DO_API_KEY=NhtDeMU6LcxJlnZWk0n7mfmNKUahMY5p

@@ -37,6 +37,7 @@ export default {
       "expo-dev-client",
       "expo-font",
       "expo-web-browser",
+      "react-native-bottom-tabs",
       [
         "expo-splash-screen",
         {
@@ -47,6 +48,12 @@ export default {
         },
       ],
       "expo-apple-authentication",
+      [
+        "expo-camera",
+        {
+          cameraPermission: "Allow Faded to access your camera for accountability mirror feature.",
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,
