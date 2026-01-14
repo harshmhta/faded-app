@@ -10,8 +10,9 @@ import DashboardHeader from "@/components/DashboardHeader";
 import MotivationalQuoteCardCompact from "@/components/MotivationalQuoteCardCompact";
 import QuickActions from "@/components/QuickActions";
 import SavingsCalculatorCardCompact from "@/components/SavingsCalculatorCardCompact";
-import SobrietyProgressCardSimplified from "@/components/SobrietyProgressCardSimplified";
+import SobrietyTimerCard, { SobrietyTimerCardRef } from "@/components/SobrietyTimerCard";
 import ExploreCalendar from "@/components/ExploreCalendar";
+import { useAuth } from "@/contexts/AuthContext";
 import { ThemedText } from "@/components/ThemedText";
 import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
@@ -146,8 +147,10 @@ function Tile({ title, subtitle, onPress, style, hideChevron }: TileProps) {
 
 export default function HomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
+  const timerCardRef = useRef<SobrietyTimerCardRef>(null);
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
+  const { user } = useAuth();
 
   // Mock data - in a real app, this would come from user preferences/storage
   const [sobrietyStartDate] = useState(
@@ -156,16 +159,23 @@ export default function HomeScreen() {
   const [dailySpending, setDailySpending] = useState(15);
   const [refreshing, setRefreshing] = useState(false);
   const [consumptionStatus, setConsumptionStatus] = useState<ConsumptionStatus | null>(null);
+  const [timerKey, setTimerKey] = useState(0); // Key to force re-render of timer
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
-    // Simulate data refresh
+    // Simulate data refresh and reload timer
     setTimeout(() => {
       setRefreshing(false);
+      setTimerKey((prev) => prev + 1);
     }, 1500);
   }, []);
+
+  const handleConsumedPress = () => {
+    // Open the reset modal when user clicks "I Consumed"
+    timerCardRef.current?.openResetModal();
+  };
 
   return (
     <ScrollView
@@ -189,7 +199,14 @@ export default function HomeScreen() {
         {/* Your Progress Section */}
         <View style={styles.firstSection}>
           <ThemedText style={styles.sectionTitle}>Your Progress</ThemedText>
-          <SobrietyProgressCardSimplified startDate={sobrietyStartDate} />
+          {user && (
+            <SobrietyTimerCard
+              ref={timerCardRef}
+              key={timerKey}
+              userId={user.$id}
+              onReset={() => setTimerKey((prev) => prev + 1)}
+            />
+          )}
         </View>
 
         {/* Recovery Journey Section */}
@@ -336,6 +353,7 @@ export default function HomeScreen() {
           <DailyConsumptionLogger 
             onStatusChange={setConsumptionStatus}
             initialStatus={consumptionStatus}
+            onConsumed={handleConsumedPress}
           />
         </View>
 

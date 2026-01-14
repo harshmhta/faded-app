@@ -8,14 +8,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeInDown,
-  FadeIn,
 } from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { FontFamily } from '@/constants/Fonts';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { courseData } from '@/data/courseContent';
 import { useCourseProgress } from '@/contexts/CourseProgressContext';
@@ -26,7 +24,7 @@ import {
   FireIcon,
   CheckmarkCircle02Icon,
   SquareLockPasswordIcon,
-  Time04Icon,
+  Notebook02Icon,
 } from '@hugeicons/core-free-icons';
 
 export default function CourseScreen() {
@@ -51,10 +49,10 @@ export default function CourseScreen() {
       {!selectedChapter && (
         <View style={styles.courseSelection}>
           <ThemedText type="subtitle" style={styles.selectionTitle}>
-            Recovery Journey
+            Your Recovery Journey
           </ThemedText>
           <ThemedText style={styles.selectionDescription}>
-            A comprehensive, science-based course to help you quit cannabis and build a fulfilling life without it.
+            A comprehensive, science-based course to help you build a fulfilling life
           </ThemedText>
 
           {/* Stats Bar */}
@@ -62,43 +60,56 @@ export default function CourseScreen() {
             entering={FadeInDown.delay(100)}
             style={[
               styles.statsBar,
-              isDark ? styles.statsBarDark : styles.statsBarLight,
+              isDark && styles.statsBarDark,
             ]}
           >
-            <BlurView
-              tint={isDark ? 'dark' : 'light'}
-              intensity={24}
-              style={styles.statsBlur}
-            />
-            
             <View style={styles.stat}>
-              <HugeiconsIcon
-                icon={FireIcon}
-                size={20}
-                color="#FF6B6B"
-              />
-              <ThemedText style={styles.statValue}>{progress?.streakDays || 0}</ThemedText>
+              <View style={[
+                styles.statIconContainer,
+                { backgroundColor: 'rgba(255, 107, 107, 0.15)' }
+              ]}>
+                <HugeiconsIcon
+                  icon={FireIcon}
+                  size={14}
+                  color="#FF6B6B"
+                />
+                <ThemedText style={[styles.statIconText, { color: '#FF6B6B' }]}>
+                  {progress?.streakDays || 0}
+                </ThemedText>
+              </View>
               <ThemedText style={styles.statLabel}>Day Streak</ThemedText>
             </View>
             
             <View style={styles.statDivider} />
             
             <View style={styles.stat}>
-              <HugeiconsIcon
-                icon={Award01Icon}
-                size={20}
-                color="#FFD93D"
-              />
-              <ThemedText style={styles.statValue}>{progress?.totalXP || 0}</ThemedText>
+              <View style={[
+                styles.statIconContainer,
+                { backgroundColor: 'rgba(255, 217, 61, 0.15)' }
+              ]}>
+                <HugeiconsIcon
+                  icon={Award01Icon}
+                  size={14}
+                  color="#FFD93D"
+                />
+                <ThemedText style={[styles.statIconText, { color: '#FFD93D' }]}>
+                  {progress?.totalXP || 0}
+                </ThemedText>
+              </View>
               <ThemedText style={styles.statLabel}>Total XP</ThemedText>
             </View>
             
             <View style={styles.statDivider} />
             
             <View style={styles.stat}>
-              <ThemedText style={styles.statValue}>
-                {progress?.completedChapters.length || 0}/13
-              </ThemedText>
+              <View style={[
+                styles.statIconContainer,
+                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)' }
+              ]}>
+                <ThemedText style={styles.statIconText}>
+                  {progress?.completedChapters.length || 0}/{courseData.chapters.length}
+                </ThemedText>
+              </View>
               <ThemedText style={styles.statLabel}>Chapters</ThemedText>
             </View>
           </Animated.View>
@@ -121,7 +132,7 @@ export default function CourseScreen() {
         <Pressable
           style={[
             styles.chapterCard,
-            isDark ? styles.chapterCardDark : styles.chapterCardLight,
+            isDark && styles.chapterCardDark,
             !isUnlocked && styles.chapterCardLocked,
             isCompleted && styles.chapterCardCompleted,
             isCurrent && styles.chapterCardCurrent,
@@ -129,22 +140,6 @@ export default function CourseScreen() {
           onPress={() => handleChapterPress(chapter)}
           disabled={!isUnlocked}
         >
-          <BlurView
-            tint={isDark ? 'dark' : 'light'}
-            intensity={isUnlocked ? 24 : 12}
-            style={styles.chapterBlur}
-          />
-          
-          <LinearGradient
-            colors={
-              isCompleted 
-                ? ['rgba(76,175,80,0.1)', 'rgba(76,175,80,0.05)']
-                : isCurrent
-                ? ['rgba(33,150,243,0.1)', 'rgba(33,150,243,0.05)']
-                : ['transparent', 'transparent']
-            }
-            style={styles.chapterGradient}
-          />
 
           <View style={styles.chapterContent}>
             <View style={styles.chapterHeader}>
@@ -195,9 +190,12 @@ export default function CourseScreen() {
             {isUnlocked && (
               <View style={styles.chapterMeta}>
                 <View style={styles.chapterStats}>
-                  <View style={styles.chapterStat}>
+                  <View style={[
+                    styles.chapterStat,
+                    isDark && styles.chapterStatDark,
+                  ]}>
                     <HugeiconsIcon
-                      icon={Time04Icon}
+                      icon={Notebook02Icon}
                       size={14}
                       color={isDark ? '#aaa' : '#666'}
                     />
@@ -206,7 +204,10 @@ export default function CourseScreen() {
                     </ThemedText>
                   </View>
                   
-                  <View style={styles.xpBadge}>
+                  <View style={[
+                    styles.xpBadge,
+                    isDark && styles.xpBadgeDark,
+                  ]}>
                     <HugeiconsIcon
                       icon={Award01Icon}
                       size={14}
@@ -288,63 +289,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   listContent: {
-    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   headerContent: {
-    paddingVertical: 20,
+    paddingHorizontal: 20,
+    paddingTop: 35,
+    paddingBottom: 8,
   },
   courseSelection: {
-    marginBottom: 20,
+    marginBottom: 0,
   },
   selectionTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 24,
     marginBottom: 8,
+    textAlign: 'center',
   },
   selectionDescription: {
     fontSize: 16,
-    opacity: 0.7,
-    lineHeight: 24,
-    marginBottom: 24,
+    opacity: 0.8,
+    marginBottom: 40,
+    textAlign: 'center',
+    fontFamily: FontFamily.regular,
   },
   statsBar: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 20,
-    marginBottom: 24,
-    overflow: 'hidden',
-  },
-  statsBarLight: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderRadius: 16,
+    marginBottom: 32,
+    backgroundColor: '#F6F7F9',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: '#E6E8EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
   },
   statsBarDark: {
-    backgroundColor: 'rgba(16,16,16,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  statsBlur: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    backgroundColor: '#181A1B',
+    borderColor: '#2A2A2A',
   },
   stat: {
     flex: 1,
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 20,
+  statIconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 6,
+  },
+  statIconText: {
+    fontSize: 13,
     fontWeight: '700',
-    marginTop: 4,
   },
   statLabel: {
     fontSize: 12,
-    opacity: 0.6,
+    opacity: 0.8,
     marginTop: 2,
+    fontFamily: FontFamily.medium,
   },
   statDivider: {
     width: 1,
@@ -353,50 +361,37 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   chaptersTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 18,
+    fontFamily: FontFamily.medium,
     marginBottom: 16,
+    opacity: 0.8,
   },
   chapterCard: {
-    borderRadius: 20,
+    borderRadius: 16,
     padding: 20,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  chapterCardLight: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    marginBottom: 16,
+    marginHorizontal: 20,
+    backgroundColor: '#F6F7F9',
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: '#E6E8EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 3,
   },
   chapterCardDark: {
-    backgroundColor: 'rgba(16,16,16,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#181A1B',
+    borderColor: '#2A2A2A',
   },
   chapterCardLocked: {
     opacity: 0.6,
   },
   chapterCardCompleted: {
-    borderColor: '#4CAF50',
-    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
   },
   chapterCardCurrent: {
-    borderColor: '#2196F3',
-    borderWidth: 2,
-  },
-  chapterBlur: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-  },
-  chapterGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    borderColor: 'rgba(33, 150, 243, 0.3)',
   },
   chapterContent: {
     flex: 1,
@@ -409,20 +404,20 @@ const styles = StyleSheet.create({
   chapterIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(33,150,243,0.1)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(33,150,243,0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   chapterIconLocked: {
     backgroundColor: 'rgba(128,128,128,0.1)',
   },
   chapterIconCompleted: {
-    backgroundColor: 'rgba(76,175,80,0.1)',
+    backgroundColor: 'rgba(76,175,80,0.15)',
   },
   chapterIconCurrent: {
-    backgroundColor: 'rgba(33,150,243,0.2)',
+    backgroundColor: 'rgba(33,150,243,0.15)',
   },
   chapterIcon: {
     fontSize: 24,
@@ -434,18 +429,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.6,
     marginBottom: 4,
+    fontFamily: FontFamily.medium,
   },
   chapterTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 20,
+    marginBottom: 8,
   },
   chapterTitleLocked: {
     opacity: 0.5,
   },
   chapterSubtitle: {
     fontSize: 14,
-    opacity: 0.7,
+    lineHeight: 20,
+    opacity: 0.8,
+    fontFamily: FontFamily.regular,
+    marginBottom: 16,
   },
   chapterSubtitleLocked: {
     opacity: 0.4,
@@ -458,40 +456,52 @@ const styles = StyleSheet.create({
   chapterStats: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   chapterStat: {
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 16,
+  },
+  chapterStatDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   chapterStatText: {
-    fontSize: 14,
+    fontSize: 12,
     marginLeft: 4,
-    opacity: 0.6,
+    opacity: 0.8,
+    fontFamily: FontFamily.medium,
   },
   xpBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,217,61,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
+  },
+  xpBadgeDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   xpText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
     marginLeft: 4,
-    color: '#FFD93D',
+    opacity: 0.8,
   },
   completionBadge: {
     backgroundColor: 'rgba(76,175,80,0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   completionText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FontFamily.medium,
+    opacity: 0.8,
     color: '#4CAF50',
   },
   emptyState: {
@@ -502,5 +512,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.6,
     textAlign: 'center',
+    fontFamily: FontFamily.regular,
   },
 });

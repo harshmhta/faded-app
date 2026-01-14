@@ -1,4 +1,7 @@
 import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { Colors } from '@/constants/Colors';
+import { FontFamily } from '@/constants/Fonts';
 import { useCourseProgress } from '@/contexts/CourseProgressContext';
 import { getCourseChapter } from '@/data/courseContent';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -8,25 +11,25 @@ import {
   CheckmarkCircle02Icon,
   QuizIcon,
   SquareLockPasswordIcon,
-  Time04Icon
+  Time04Icon,
+  ThumbsUpIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
   Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import Animated, {
-  FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -35,16 +38,15 @@ export default function ChapterDetailScreen() {
   const chapterNumber = parseInt(id as string);
   const chapter = getCourseChapter(chapterNumber);
   
-  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const { progress, isSectionCompleted } = useCourseProgress();
 
   if (!chapter) {
     return (
-      <View style={styles.container}>
+      <ThemedView style={styles.container}>
         <ThemedText>Chapter not found</ThemedText>
-      </View>
+      </ThemedView>
     );
   }
 
@@ -63,60 +65,45 @@ export default function ChapterDetailScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 },
-        ]}
-      >
-        {/* Header */}
-        <Animated.View 
-          entering={FadeIn.springify()}
-          style={styles.header}
+    <>
+      <Stack.Screen
+        options={{
+          title: `Chapter ${chapter.number}`,
+          headerShown: true,
+          headerTransparent: false,
+          headerTitleStyle: {
+            fontSize: 18,
+            fontFamily: FontFamily.medium,
+          },
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.headerButton}
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft01Icon}
+                size={24}
+                color={Colors[colorScheme].text}
+                strokeWidth={2.0}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <ThemedView style={styles.container}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <HugeiconsIcon
-              icon={ArrowLeft01Icon}
-              size={24}
-              color={isDark ? '#fff' : '#000'}
-            />
-          </Pressable>
-          
-          <View style={styles.headerContent}>
-            <ThemedText style={styles.chapterLabel}>
-              Chapter {chapter.number}
-            </ThemedText>
+          {/* Chapter Info */}
+          <View style={styles.headerSection}>
             <ThemedText type="title" style={styles.chapterTitle}>
               {chapter.title}
             </ThemedText>
-            <ThemedText style={styles.chapterSubtitle}>
-              {chapter.subtitle}
+            <ThemedText style={styles.chapterDescription}>
+              {chapter.description}
             </ThemedText>
           </View>
-        </Animated.View>
-
-        {/* Chapter Description */}
-        <Animated.View
-          entering={FadeInDown.delay(100).springify()}
-          style={[
-            styles.descriptionCard,
-            isDark ? styles.cardDark : styles.cardLight,
-          ]}
-        >
-          <BlurView
-            tint={isDark ? 'dark' : 'light'}
-            intensity={24}
-            style={styles.cardBlur}
-          />
-          <ThemedText style={styles.description}>
-            {chapter.description}
-          </ThemedText>
-        </Animated.View>
 
         {/* Sections */}
         <Animated.View
@@ -139,7 +126,6 @@ export default function ChapterDetailScreen() {
                   style={[
                     styles.sectionCard,
                     isDark ? styles.cardDark : styles.cardLight,
-                    isCompleted && styles.sectionCardCompleted,
                   ]}
                 >
                   <BlurView
@@ -200,7 +186,7 @@ export default function ChapterDetailScreen() {
         <Animated.View
           entering={FadeInDown.delay(500 + chapter.sections.length * 100).springify()}
         >
-          <ThemedText type="subtitle" style={styles.sectionHeader}>
+          <ThemedText type="subtitle" style={[styles.sectionHeader, styles.quizSectionHeader]}>
             Chapter Quiz
           </ThemedText>
           
@@ -211,6 +197,8 @@ export default function ChapterDetailScreen() {
               styles.quizCard,
               isDark ? styles.cardDark : styles.cardLight,
               !allSectionsCompleted && styles.quizCardLocked,
+              allSectionsCompleted && !progress?.quizScores[chapter.id] && styles.quizCardUnlocked,
+              progress?.quizScores[chapter.id] && styles.quizCardCompleted,
             ]}
           >
             <BlurView
@@ -244,88 +232,77 @@ export default function ChapterDetailScreen() {
                   styles.quizTitle,
                   !allSectionsCompleted && styles.lockedText,
                 ]}>
-                  {chapter.quiz.title}
-                </ThemedText>
-                <ThemedText style={[
-                  styles.quizDescription,
-                  !allSectionsCompleted && styles.lockedText,
-                ]}>
                   {allSectionsCompleted 
-                    ? chapter.quiz.description
+                    ? chapter.quiz.title
                     : 'Complete all lessons to unlock the quiz'
                   }
                 </ThemedText>
                 
-                {allSectionsCompleted && (
-                  <View style={styles.quizMeta}>
-                    <View style={styles.xpBadge}>
-                      <HugeiconsIcon
-                        icon={Award01Icon}
-                        size={16}
-                        color="#FFD93D"
-                      />
-                      <ThemedText style={styles.xpText}>
-                        {chapter.quiz.xpReward} XP
-                      </ThemedText>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </View>
-            
-            {progress?.quizScores[chapter.id] && (
-              <View style={styles.quizScore}>
-                <ThemedText style={styles.quizScoreText}>
-                  Score: {progress.quizScores[chapter.id]}%
-                </ThemedText>
-              </View>
-            )}
+                 {allSectionsCompleted && (
+                   <View style={styles.quizMeta}>
+                     <View style={styles.xpBadge}>
+                       <HugeiconsIcon
+                         icon={Award01Icon}
+                         size={14}
+                         color="#FFD93D"
+                       />
+                       <ThemedText style={styles.xpText}>
+                         {chapter.quiz.xpReward} XP
+                       </ThemedText>
+                     </View>
+                     
+                     {progress?.quizScores[chapter.id] && (
+                       <View style={styles.quizScore}>
+                         <HugeiconsIcon
+                           icon={ThumbsUpIcon}
+                           size={14}
+                           color="#4CAF50"
+                         />
+                         <ThemedText style={styles.quizScoreText}>
+                           {progress.quizScores[chapter.id]}%
+                         </ThemedText>
+                       </View>
+                     )}
+                   </View>
+                 )}
+               </View>
+             </View>
           </Pressable>
         </Animated.View>
       </ScrollView>
-    </View>
+    </ThemedView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 20,
-  },
-  backButton: {
+  headerButton: {
     padding: 8,
-    marginRight: 12,
-    marginTop: 4,
+    marginLeft: -4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerContent: {
-    flex: 1,
-  },
-  chapterLabel: {
-    fontSize: 14,
-    opacity: 0.6,
-    marginBottom: 4,
+  headerSection: {
+    paddingTop: 20,
+    paddingBottom: 24,
   },
   chapterTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 24,
+    fontFamily: FontFamily.bold,
+    marginBottom: 12,
   },
-  chapterSubtitle: {
+  chapterDescription: {
     fontSize: 16,
     opacity: 0.7,
-  },
-  descriptionCard: {
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 30,
-    overflow: 'hidden',
+    lineHeight: 24,
   },
   cardLight: {
     backgroundColor: 'rgba(255,255,255,0.6)',
@@ -344,24 +321,20 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  description: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
   sectionHeader: {
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 16,
+    marginTop: 8,
+  },
+  quizSectionHeader: {
+    marginTop: 24,
   },
   sectionCard: {
     padding: 20,
     borderRadius: 20,
-    marginBottom: 12,
+    marginBottom: 16,
     overflow: 'hidden',
-  },
-  sectionCardCompleted: {
-    borderColor: '#4CAF50',
-    borderWidth: 2,
   },
   sectionContent: {
     flexDirection: 'row',
@@ -417,12 +390,18 @@ const styles = StyleSheet.create({
   quizCard: {
     padding: 24,
     borderRadius: 24,
-    marginTop: 8,
-    marginBottom: 20,
     overflow: 'hidden',
   },
   quizCardLocked: {
     opacity: 0.6,
+  },
+  quizCardUnlocked: {
+    borderColor: 'rgba(33,150,243,0.3)',
+    borderWidth: 1,
+  },
+  quizCardCompleted: {
+    borderColor: 'rgba(76,175,80,0.3)',
+    borderWidth: 1,
   },
   quizGradient: {
     position: 'absolute',
@@ -454,19 +433,22 @@ const styles = StyleSheet.create({
   },
   quizMeta: {
     marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   quizScore: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(76,175,80,0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 12,
   },
   quizScoreText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#4CAF50',
+    marginLeft: 4,
   },
 });

@@ -5,20 +5,16 @@ import {
   View,
   Pressable,
   Dimensions,
+  TouchableOpacity,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   FadeInDown,
-  FadeIn,
-  FadeInUp,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
 } from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { getChapterSection, getCourseChapter } from '@/data/courseContent';
 import { useCourseProgress } from '@/contexts/CourseProgressContext';
@@ -28,10 +24,15 @@ import {
   Time04Icon,
   Award01Icon,
   CheckmarkCircle02Icon,
+  ArrowRight01Icon,
+  SparklesIcon,
+  BulbIcon,
 } from '@hugeicons/core-free-icons';
+import { Colors } from '@/constants/Colors';
+import { FontFamily } from '@/constants/Fonts';
 import * as Haptics from 'expo-haptics';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function LessonScreen() {
   const { chapter: chapterNum, section: sectionId } = useLocalSearchParams();
@@ -39,16 +40,12 @@ export default function LessonScreen() {
   const chapter = getCourseChapter(chapterNumber);
   const section = getChapterSection(chapterNumber, sectionId as string);
   
-  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const { completeSection, isSectionCompleted } = useCourseProgress();
   const [isCompleted, setIsCompleted] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [showCompletionButton, setShowCompletionButton] = useState(false);
-  
-  const buttonScale = useSharedValue(0);
-  const buttonOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (chapter && section) {
@@ -56,16 +53,11 @@ export default function LessonScreen() {
     }
   }, [chapter, section, isSectionCompleted]);
 
-  const animatedButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: buttonScale.value }],
-    opacity: buttonOpacity.value,
-  }));
-
   if (!chapter || !section) {
     return (
-      <View style={styles.container}>
+      <ThemedView style={styles.container}>
         <ThemedText>Lesson not found</ThemedText>
-      </View>
+      </ThemedView>
     );
   }
 
@@ -77,8 +69,6 @@ export default function LessonScreen() {
     
     if (isCloseToBottom && !isCompleted && !showCompletionButton) {
       setShowCompletionButton(true);
-      buttonScale.value = withSpring(1, { damping: 15 });
-      buttonOpacity.value = withSpring(1);
     }
   };
 
@@ -97,8 +87,47 @@ export default function LessonScreen() {
     }
   };
 
+  const processText = (text: string) => {
+    // Replace companion app references with app-specific features
+    return text
+      .replace(/Download the companion app/g, 'Use the built-in tools')
+      .replace(/companion app/g, 'app')
+      .replace(/The course works offline/g, 'Track your progress');
+  };
+
+  const renderTextWithBold = (text: string, key: string) => {
+    const parts: (string | JSX.Element)[] = [];
+    const boldRegex = /\*\*(.*?)\*\*/g;
+    let lastIndex = 0;
+    let match;
+    let partIndex = 0;
+
+    while ((match = boldRegex.exec(text)) !== null) {
+      // Add text before the bold part
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      
+      // Add the bold part
+      parts.push(
+        <ThemedText key={`${key}-bold-${partIndex++}`} style={{ fontWeight: '700', fontFamily: FontFamily.bold }}>
+          {match[1]}
+        </ThemedText>
+      );
+      
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+    
+    return parts.length > 0 ? parts : text;
+  };
+
   const renderContent = () => {
-    const content = section.content;
+    const content = processText(section.content);
     const parts = content.split(/\/highlight|\/endhighlight/);
     
     return parts.map((part, index) => {
@@ -121,65 +150,92 @@ export default function LessonScreen() {
             />
             <LinearGradient
               colors={isDark 
-                ? ['rgba(76,175,80,0.1)', 'rgba(76,175,80,0.05)']
-                : ['rgba(76,175,80,0.08)', 'rgba(76,175,80,0.03)']
+                ? ['rgba(76,175,80,0.15)', 'rgba(76,175,80,0.08)']
+                : ['rgba(76,175,80,0.12)', 'rgba(76,175,80,0.05)']
               }
               style={styles.highlightGradient}
             />
+            <View style={styles.highlightHeader}>
+              <HugeiconsIcon
+                icon={BulbIcon}
+                size={20}
+                color="#FFD93D"
+              />
+              <ThemedText style={styles.highlightTitle}>Key Insight</ThemedText>
+            </View>
             <ThemedText style={styles.highlightedText}>
-              {part.trim()}
+              {renderTextWithBold(part.trim(), `highlight-${index}`)}
             </ThemedText>
           </Animated.View>
         );
       }
       
-      // Split by headers
+      // Split by headers and paragraphs
       const lines = part.split('\n');
       return lines.map((line, lineIndex) => {
         const trimmedLine = line.trim();
         
-        // H2 Headers
+        // H2 Headers - Major sections
         if (trimmedLine.startsWith('## ')) {
           return (
-            <ThemedText 
-              key={`${index}-${lineIndex}`}
-              type="subtitle" 
-              style={styles.h2}
-            >
-              {trimmedLine.substring(3)}
-            </ThemedText>
+            <View key={`${index}-${lineIndex}`} style={styles.h2Container}>
+              <LinearGradient
+                colors={isDark 
+                  ? ['rgba(33,150,243,0.15)', 'rgba(33,150,243,0.05)']
+                  : ['rgba(33,150,243,0.1)', 'rgba(33,150,243,0.03)']
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.h2Gradient}
+              />
+              <ThemedText 
+                type="subtitle" 
+                style={styles.h2}
+              >
+                {trimmedLine.substring(3)}
+              </ThemedText>
+            </View>
           );
         }
         
-        // H3 Headers
+        // H3 Headers - Subsections
         if (trimmedLine.startsWith('### ')) {
           return (
-            <ThemedText 
-              key={`${index}-${lineIndex}`}
-              style={styles.h3}
-            >
-              {trimmedLine.substring(4)}
-            </ThemedText>
+            <View key={`${index}-${lineIndex}`} style={styles.h3Container}>
+              <View style={styles.h3Accent} />
+              <ThemedText style={styles.h3}>
+                {trimmedLine.substring(4)}
+              </ThemedText>
+            </View>
           );
         }
         
-        // Bold text
-        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**')) {
+        // Bold standalone text
+        if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**') && !trimmedLine.startsWith('• ')) {
+          const content = trimmedLine.substring(2, trimmedLine.length - 2);
+          
           return (
-            <ThemedText 
-              key={`${index}-${lineIndex}`}
-              style={styles.boldText}
-            >
-              {trimmedLine.substring(2, trimmedLine.length - 2)}
-            </ThemedText>
+            <View key={`${index}-${lineIndex}`} style={styles.boldTextContainer}>
+              <View style={styles.boldBullet}>
+                <HugeiconsIcon
+                  icon={ArrowRight01Icon}
+                  size={16}
+                  color={isDark ? '#fff' : '#000'}
+                  strokeWidth={2.5}
+                />
+              </View>
+              <ThemedText style={styles.boldText}>
+                {content}
+              </ThemedText>
+            </View>
           );
         }
         
-        // List items
+        // List items with enhanced styling
         if (trimmedLine.startsWith('• ')) {
           const listContent = trimmedLine.substring(2);
-          // Check for bold within list
           const boldMatch = listContent.match(/\*\*(.*?)\*\*/);
+          
           if (boldMatch) {
             const beforeBold = listContent.substring(0, boldMatch.index);
             const boldText = boldMatch[1];
@@ -187,32 +243,50 @@ export default function LessonScreen() {
             
             return (
               <View key={`${index}-${lineIndex}`} style={styles.listItem}>
-                <ThemedText style={styles.bullet}>•</ThemedText>
-                <ThemedText style={styles.listText}>
-                  {beforeBold}
-                  <ThemedText style={styles.listBold}>{boldText}</ThemedText>
-                  {afterBold}
-                </ThemedText>
+                <View style={styles.bulletContainer}>
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    size={14}
+                    color="#2196F3"
+                    strokeWidth={2}
+                  />
+                </View>
+                <View style={styles.listTextContainer}>
+                  <ThemedText style={styles.listText}>
+                    <ThemedText style={styles.listBold}>{boldText}</ThemedText>
+                    {beforeBold && <ThemedText>{beforeBold}</ThemedText>}
+                    {afterBold}
+                  </ThemedText>
+                </View>
               </View>
             );
           }
           
           return (
             <View key={`${index}-${lineIndex}`} style={styles.listItem}>
-              <ThemedText style={styles.bullet}>•</ThemedText>
-              <ThemedText style={styles.listText}>{listContent}</ThemedText>
+              <View style={styles.bulletContainer}>
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  size={14}
+                  color="#2196F3"
+                  strokeWidth={2}
+                />
+              </View>
+              <View style={styles.listTextContainer}>
+                <ThemedText style={styles.listText}>{listContent}</ThemedText>
+              </View>
             </View>
           );
         }
         
-        // Regular paragraphs
+        // Regular paragraphs with better spacing
         if (trimmedLine) {
           return (
             <ThemedText 
               key={`${index}-${lineIndex}`}
               style={styles.paragraph}
             >
-              {trimmedLine}
+              {renderTextWithBold(trimmedLine, `${index}-${lineIndex}`)}
             </ThemedText>
           );
         }
@@ -223,266 +297,305 @@ export default function LessonScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <Animated.View 
-        entering={FadeIn.springify()}
-        style={[
-          styles.header,
-          { paddingTop: insets.top + 20 },
-          isDark ? styles.headerDark : styles.headerLight,
-        ]}
-      >
-        <BlurView
-          tint={isDark ? 'dark' : 'light'}
-          intensity={80}
-          style={styles.headerBlur}
-        />
-        
-        <View style={styles.headerContent}>
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-          >
-            <HugeiconsIcon
-              icon={ArrowLeft01Icon}
-              size={24}
-              color={isDark ? '#fff' : '#000'}
-            />
-          </Pressable>
-          
-          <View style={styles.headerInfo}>
-            <ThemedText style={styles.lessonLabel}>
-              Chapter {chapterNumber} • Lesson
-            </ThemedText>
-            <ThemedText style={styles.lessonTitle} numberOfLines={1}>
-              {section.title}
-            </ThemedText>
-          </View>
-          
-          {isCompleted && (
-            <Animated.View entering={FadeIn.springify()}>
+    <>
+      <Stack.Screen
+        options={{
+          title: section.title,
+          headerShown: true,
+          headerTransparent: false,
+          headerTitleStyle: {
+            fontSize: 18,
+            fontFamily: FontFamily.medium,
+          },
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.headerButton}
+            >
               <HugeiconsIcon
-                icon={CheckmarkCircle02Icon}
+                icon={ArrowLeft01Icon}
                 size={24}
-                color="#4CAF50"
+                color={Colors[colorScheme].text}
+                strokeWidth={2.0}
               />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <ThemedView style={styles.container}>
+        <ScrollView
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
+          {/* Lesson Header */}
+          <View style={styles.headerSection}>
+            <View style={styles.metaRow}>
+              <View style={styles.metaItem}>
+                <HugeiconsIcon
+                  icon={Time04Icon}
+                  size={14}
+                  color={isDark ? '#aaa' : '#666'}
+                />
+                <ThemedText style={styles.metaText}>
+                  {section.readTime}
+                </ThemedText>
+              </View>
+              
+              <View style={styles.xpBadge}>
+                <HugeiconsIcon
+                  icon={Award01Icon}
+                  size={14}
+                  color="#FFD93D"
+                />
+                <ThemedText style={styles.xpText}>
+                  {section.xpReward} XP
+                </ThemedText>
+              </View>
+              
+              {isCompleted && (
+                <View style={styles.completedBadge}>
+                  <HugeiconsIcon
+                    icon={CheckmarkCircle02Icon}
+                    size={14}
+                    color="#4CAF50"
+                  />
+                  <ThemedText style={styles.completedText}>
+                    Completed
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Content */}
+          <Animated.View 
+            entering={FadeInDown.delay(200).springify()}
+            style={styles.content}
+          >
+            {renderContent()}
+          </Animated.View>
+
+          {/* Completion Button */}
+          {showCompletionButton && !isCompleted && (
+            <Animated.View 
+              entering={FadeInDown.delay(300).springify()}
+              style={styles.completionSection}
+            >
+              <Pressable
+                onPress={handleComplete}
+                style={[
+                  styles.completionButton,
+                  isDark ? styles.cardDark : styles.cardLight,
+                ]}
+              >
+                <BlurView
+                  tint={isDark ? 'dark' : 'light'}
+                  intensity={24}
+                  style={styles.cardBlur}
+                />
+                
+                <LinearGradient
+                  colors={['rgba(76,175,80,0.1)', 'rgba(76,175,80,0.05)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.completionGradient}
+                />
+                
+                <View style={styles.completionContent}>
+                  <View style={styles.completionInfo}>
+                    <ThemedText style={styles.completionTitle}>
+                      Complete Lesson
+                    </ThemedText>
+                    <ThemedText style={styles.completionDescription}>
+                      Mark this lesson as complete and earn XP
+                    </ThemedText>
+                  </View>
+                  
+                  <View style={styles.xpRewardBadge}>
+                    <HugeiconsIcon
+                      icon={Award01Icon}
+                      size={20}
+                      color="#FFD93D"
+                    />
+                    <ThemedText style={styles.xpRewardText}>
+                      +{section.xpReward} XP
+                    </ThemedText>
+                  </View>
+                </View>
+              </Pressable>
             </Animated.View>
           )}
-        </View>
-        
-        <View style={styles.lessonMeta}>
-          <View style={styles.metaItem}>
-            <HugeiconsIcon
-              icon={Time04Icon}
-              size={16}
-              color={isDark ? '#aaa' : '#666'}
-            />
-            <ThemedText style={styles.metaText}>
-              {section.readTime}
-            </ThemedText>
-          </View>
-          
-          <View style={styles.metaItem}>
-            <HugeiconsIcon
-              icon={Award01Icon}
-              size={16}
-              color="#FFD93D"
-            />
-            <ThemedText style={styles.metaText}>
-              {section.xpReward} XP
-            </ThemedText>
-          </View>
-        </View>
-      </Animated.View>
-
-      {/* Content */}
-      <ScrollView
-        ref={scrollViewRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 120 },
-        ]}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        <Animated.View 
-          entering={FadeInDown.delay(200).springify()}
-          style={styles.content}
-        >
-          {renderContent()}
-        </Animated.View>
-      </ScrollView>
-
-      {/* Completion Button */}
-      {showCompletionButton && !isCompleted && (
-        <Animated.View 
-          style={[
-            styles.completionContainer,
-            { paddingBottom: insets.bottom + 20 },
-            animatedButtonStyle,
-          ]}
-        >
-          <Pressable
-            onPress={handleComplete}
-            style={[
-              styles.completionButton,
-              isDark ? styles.completionButtonDark : styles.completionButtonLight,
-            ]}
-          >
-            <LinearGradient
-              colors={['#4CAF50', '#45a049']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.completionGradient}
-            />
-            <ThemedText style={styles.completionText}>
-              Complete Lesson
-            </ThemedText>
-            <View style={styles.xpReward}>
-              <HugeiconsIcon
-                icon={Award01Icon}
-                size={20}
-                color="#fff"
-              />
-              <ThemedText style={styles.xpRewardText}>
-                +{section.xpReward} XP
-              </ThemedText>
-            </View>
-          </Pressable>
-        </Animated.View>
-      )}
-    </View>
+        </ScrollView>
+      </ThemedView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
+  scrollContent: {
     paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  headerButton: {
+    padding: 8,
+    marginLeft: -4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSection: {
+    paddingTop: 0,
     paddingBottom: 16,
   },
-  headerLight: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.06)',
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerDark: {
-    backgroundColor: 'rgba(16,16,16,0.9)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  headerBlur: {
+  metaText: {
+    fontSize: 14,
+    marginLeft: 4,
+    opacity: 0.6,
+  },
+  xpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,217,61,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 12,
+  },
+  xpText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+    color: '#FFD93D',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76,175,80,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  completedText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginLeft: 4,
+  },
+  content: {
+    paddingBottom: 20,
+  },
+  paragraph: {
+    fontSize: 16,
+    lineHeight: 26,
+    marginBottom: 16,
+    opacity: 0.9,
+  },
+  h2Container: {
+    marginTop: 32,
+    marginBottom: 16,
+    marginHorizontal: -4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  h2Gradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
     bottom: 0,
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 12,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  lessonLabel: {
-    fontSize: 12,
-    opacity: 0.6,
-    marginBottom: 2,
-  },
-  lessonTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  lessonMeta: {
-    flexDirection: 'row',
-    marginTop: 8,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  metaText: {
-    fontSize: 14,
-    marginLeft: 4,
-    opacity: 0.7,
-  },
-  scrollContent: {
-    paddingTop: 140,
-    paddingHorizontal: 20,
-  },
-  content: {
-    paddingBottom: 40,
-  },
-  paragraph: {
-    fontSize: 16,
-    lineHeight: 26,
-    marginBottom: 16,
-  },
   h2: {
     fontSize: 22,
     fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  h3Container: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 24,
     marginBottom: 12,
+  },
+  h3Accent: {
+    width: 3,
+    height: 20,
+    backgroundColor: '#2196F3',
+    borderRadius: 2,
+    marginRight: 12,
   },
   h3: {
     fontSize: 18,
     fontWeight: '600',
+    flex: 1,
+  },
+  boldTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 20,
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+  boldBullet: {
+    marginRight: 8,
   },
   boldText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    marginVertical: 8,
+    flex: 1,
   },
   listItem: {
     flexDirection: 'row',
-    marginBottom: 8,
-    paddingLeft: 8,
+    marginBottom: 12,
+    paddingLeft: 4,
+    alignItems: 'flex-start',
   },
-  bullet: {
-    fontSize: 16,
-    marginRight: 8,
-    opacity: 0.6,
+  bulletContainer: {
+    paddingTop: 2,
+    marginRight: 10,
+  },
+  listTextContainer: {
+    flex: 1,
   },
   listText: {
-    flex: 1,
     fontSize: 16,
     lineHeight: 24,
+    opacity: 0.9,
   },
   listBold: {
-    fontWeight: '600',
+    fontWeight: '700',
+    opacity: 1,
   },
   highlightedSection: {
-    marginVertical: 20,
+    marginVertical: 24,
     padding: 20,
-    borderRadius: 16,
+    borderRadius: 20,
     overflow: 'hidden',
   },
   highlightedSectionLight: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderWidth: 1,
-    borderColor: 'rgba(76,175,80,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 2,
+    borderColor: 'rgba(76,175,80,0.3)',
   },
   highlightedSectionDark: {
-    backgroundColor: 'rgba(16,16,16,0.5)',
-    borderWidth: 1,
-    borderColor: 'rgba(76,175,80,0.3)',
+    backgroundColor: 'rgba(16,16,16,0.6)',
+    borderWidth: 2,
+    borderColor: 'rgba(76,175,80,0.4)',
   },
   highlightBlur: {
     position: 'absolute',
@@ -498,32 +611,49 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
+  highlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  highlightTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    opacity: 0.6,
+    marginLeft: 8,
+  },
   highlightedText: {
     fontSize: 16,
     lineHeight: 26,
-    fontWeight: '500',
+    fontWeight: '600',
+    opacity: 0.95,
   },
-  completionContainer: {
+  cardLight: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  cardDark: {
+    backgroundColor: 'rgba(16,16,16,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  cardBlur: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 20,
+    top: 0,
+    bottom: 0,
+  },
+  completionSection: {
+    marginTop: 32,
   },
   completionButton: {
+    padding: 24,
     borderRadius: 24,
     overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  completionButtonLight: {
-    backgroundColor: '#4CAF50',
-  },
-  completionButtonDark: {
-    backgroundColor: '#4CAF50',
   },
   completionGradient: {
     position: 'absolute',
@@ -532,25 +662,37 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
-  completionText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  xpReward: {
-    position: 'absolute',
-    right: 20,
-    top: 0,
-    bottom: 0,
+  completionContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  completionInfo: {
+    flex: 1,
+  },
+  completionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  completionDescription: {
+    fontSize: 14,
+    opacity: 0.7,
+    lineHeight: 20,
+  },
+  xpRewardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,217,61,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    marginLeft: 16,
   },
   xpRewardText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
-    marginLeft: 4,
+    color: '#FFD93D',
+    marginLeft: 6,
   },
 });

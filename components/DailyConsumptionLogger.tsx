@@ -27,11 +27,13 @@ export interface ConsumptionStatus {
 interface DailyConsumptionLoggerProps {
   onStatusChange?: (status: ConsumptionStatus) => void;
   initialStatus?: ConsumptionStatus | null;
+  onConsumed?: () => void; // Callback when user selects "I Consumed"
 }
 
 export default function DailyConsumptionLogger({
   onStatusChange,
   initialStatus,
+  onConsumed,
 }: DailyConsumptionLoggerProps) {
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
@@ -107,6 +109,7 @@ export default function DailyConsumptionLogger({
     const newStatus = { date: today, consumed: true };
     setStatus(newStatus);
     onStatusChange?.(newStatus);
+    onConsumed?.(); // Trigger timer reset flow
     
     // Reset green animation
     Animated.timing(greenFillAnimation, {

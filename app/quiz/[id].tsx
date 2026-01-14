@@ -1,45 +1,36 @@
-import React, { useState, useRef } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  Pressable,
-  Dimensions,
-  Text,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  FadeInDown,
-  FadeIn,
-  FadeOut,
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { getCourseChapter } from '@/data/courseContent';
 import { useCourseProgress } from '@/contexts/CourseProgressContext';
-import { QuizQuestion } from '@/types/course';
-import { HugeiconsIcon } from '@hugeicons/react-native';
-import { 
-  ArrowLeft01Icon,
-  CheckmarkCircle02Icon,
-  Cancel02Icon,
-  Award01Icon,
+import { getCourseChapter } from '@/data/courseContent';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import {
+    ArrowLeft01Icon,
+    ArrowRight01Icon,
+    Award01Icon,
+    CancelCircleIcon,
+    CheckmarkCircle02Icon,
+    ThumbsUpIcon,
+    Tick02Icon,
 } from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react-native';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { 
-  GestureHandlerRootView,
-  PanGestureHandler,
-  State,
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Dimensions,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    View
+} from 'react-native';
+import {
+    GestureHandlerRootView
 } from 'react-native-gesture-handler';
+import Animated, {
+    FadeIn,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -57,15 +48,13 @@ export default function QuizScreen() {
   const isDark = colorScheme === 'dark';
   const { completeChapter } = useCourseProgress();
   
+  const [showIntro, setShowIntro] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerState>({});
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [score, setScore] = useState(0);
   const [showFinalScore, setShowFinalScore] = useState(false);
-
-  const questionOpacity = useSharedValue(1);
-  const resultScale = useSharedValue(0);
 
   if (!chapter || !chapter.quiz) {
     return (
@@ -77,14 +66,6 @@ export default function QuizScreen() {
 
   const currentQuestion = chapter.quiz.questions[currentQuestionIndex];
   const progress = (currentQuestionIndex + 1) / chapter.quiz.questions.length;
-
-  const animatedQuestionStyle = useAnimatedStyle(() => ({
-    opacity: questionOpacity.value,
-  }));
-
-  const animatedResultStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: resultScale.value }],
-  }));
 
   const checkAnswer = () => {
     let correct = false;
@@ -114,21 +95,12 @@ export default function QuizScreen() {
     }
 
     setShowResult(true);
-    resultScale.value = withSpring(1, { damping: 15 });
   };
 
   const nextQuestion = () => {
     if (currentQuestionIndex < chapter.quiz.questions.length - 1) {
-      questionOpacity.value = withSequence(
-        withTiming(0, { duration: 200 }),
-        withTiming(1, { duration: 200 })
-      );
-      resultScale.value = withTiming(0, { duration: 200 });
-      
-      setTimeout(() => {
-        setCurrentQuestionIndex(currentQuestionIndex + 1);
-        setShowResult(false);
-      }, 200);
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+      setShowResult(false);
     } else {
       finishQuiz();
     }
@@ -138,9 +110,8 @@ export default function QuizScreen() {
     const finalScore = Math.round((score / chapter.quiz.questions.length) * 100);
     setShowFinalScore(true);
     
-    if (finalScore >= chapter.quiz.passingScore) {
-      await completeChapter(chapter.id, finalScore, chapter.quiz.xpReward);
-    }
+    // Everyone passes and earns XP
+    await completeChapter(chapter.id, finalScore, chapter.quiz.xpReward);
   };
 
   const renderQuestion = () => {
@@ -179,7 +150,6 @@ export default function QuizScreen() {
 
   if (showFinalScore) {
     const finalScore = Math.round((score / chapter.quiz.questions.length) * 100);
-    const passed = finalScore >= chapter.quiz.passingScore;
     
     return (
       <GestureHandlerRootView style={styles.container}>
@@ -188,39 +158,192 @@ export default function QuizScreen() {
             entering={FadeIn.springify()}
             style={styles.finalScoreContent}
           >
-            <View style={[
-              styles.scoreCircle,
-              passed ? styles.scoreCirclePassed : styles.scoreCircleFailed,
-            ]}>
+            <View style={styles.scoreCircle}>
               <ThemedText style={styles.finalScoreText}>
                 {finalScore}%
               </ThemedText>
             </View>
             
             <ThemedText type="title" style={styles.finalTitle}>
-              {passed ? 'Congratulations!' : 'Keep Learning!'}
+              Great Job! 🎉
             </ThemedText>
             
             <ThemedText style={styles.finalMessage}>
-              {passed 
-                ? `You passed with ${finalScore}%! You've earned ${chapter.quiz.xpReward} XP.`
-                : `You scored ${finalScore}%. The passing score is ${chapter.quiz.passingScore}%. Try again!`
-              }
+              You scored {finalScore}% and earned {chapter.quiz.xpReward} XP!
             </ThemedText>
             
             <Pressable
               onPress={() => router.back()}
-              style={[
-                styles.finishButton,
-                passed ? styles.finishButtonPassed : styles.finishButtonFailed,
-              ]}
+              style={styles.finishButton}
             >
               <ThemedText style={styles.finishButtonText}>
-                {passed ? 'Continue' : 'Try Again'}
+                Continue
               </ThemedText>
             </Pressable>
           </Animated.View>
         </View>
+      </GestureHandlerRootView>
+    );
+  }
+
+  // Intro screen
+  if (showIntro) {
+    // Split description into subtitle and main text
+    const descriptionParts = chapter.quiz.description.split('\n\n');
+    const subtitle = descriptionParts[0];
+    const mainDescription = descriptionParts[1] || chapter.quiz.description;
+
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 30 },
+          ]}
+        >
+          {/* Back Button */}
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.introBackButton}
+          >
+            <HugeiconsIcon
+              icon={ArrowLeft01Icon}
+              size={24}
+              color={isDark ? '#fff' : '#000'}
+            />
+          </Pressable>
+
+          {/* Main Card */}
+          <Animated.View 
+            entering={FadeIn.duration(600)}
+            style={[
+              styles.introCard,
+              isDark ? styles.introCardDark : styles.introCardLight,
+            ]}
+          >
+            <BlurView
+              tint={isDark ? 'dark' : 'light'}
+              intensity={24}
+              style={styles.introCardBlur}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={
+                isDark
+                  ? ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.015)', 'rgba(255,255,255,0)']
+                  : ['rgba(0,0,0,0.03)', 'rgba(0,0,0,0.015)', 'rgba(0,0,0,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.introCardGradient}
+            />
+
+            {/* Chapter Badge */}
+            <View style={[
+              styles.chapterBadge,
+              isDark ? styles.chapterBadgeDark : styles.chapterBadgeLight,
+            ]}>
+              <ThemedText style={styles.chapterBadgeText}>
+                Chapter {chapter.number}
+              </ThemedText>
+            </View>
+
+            {/* Title */}
+            <ThemedText style={styles.introCardTitle}>
+              {chapter.quiz.title}
+            </ThemedText>
+
+            {/* Subtitle */}
+            {descriptionParts.length > 1 && (
+              <ThemedText style={styles.introCardSubtitle}>
+                {subtitle}
+              </ThemedText>
+            )}
+
+            {/* Description */}
+            <ThemedText style={styles.introCardDescription}>
+              {mainDescription}
+            </ThemedText>
+
+            {/* Stats */}
+            <View style={styles.introStatsContainer}>
+              <View style={styles.introStatItem}>
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  size={20}
+                  color="#2196F3"
+                  strokeWidth={2}
+                />
+                <ThemedText style={styles.introStatValue}>
+                  {chapter.quiz.questions.length}
+                </ThemedText>
+                <ThemedText style={styles.introStatLabel}>
+                  Questions
+                </ThemedText>
+              </View>
+
+              <View style={styles.introStatItem}>
+                <HugeiconsIcon
+                  icon={ThumbsUpIcon}
+                  size={20}
+                  color="#4CAF50"
+                  strokeWidth={2}
+                />
+                <ThemedText style={styles.introStatValue}>
+                  {chapter.quiz.passingScore}%
+                </ThemedText>
+                <ThemedText style={styles.introStatLabel}>
+                  To Pass
+                </ThemedText>
+              </View>
+
+              <View style={styles.introStatItem}>
+                <HugeiconsIcon
+                  icon={Award01Icon}
+                  size={20}
+                  color="#FFD93D"
+                  strokeWidth={2}
+                />
+                <ThemedText style={styles.introStatValue}>
+                  +{chapter.quiz.xpReward}
+                </ThemedText>
+                <ThemedText style={styles.introStatLabel}>
+                  XP Reward
+                </ThemedText>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Start Button */}
+          <Animated.View entering={FadeIn.delay(200).duration(600)}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setShowIntro(false);
+              }}
+              style={({ pressed }) => [
+                styles.startButton,
+                pressed && styles.startButtonPressed,
+              ]}
+            >
+              <LinearGradient
+                colors={['#2196F3', '#1976D2']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.startButtonGradient}
+              />
+              <ThemedText style={styles.startButtonText}>
+                Begin Quiz
+              </ThemedText>
+              <HugeiconsIcon
+                icon={ArrowRight01Icon}
+                size={20}
+                color="#fff"
+              />
+            </Pressable>
+          </Animated.View>
+        </ScrollView>
       </GestureHandlerRootView>
     );
   }
@@ -231,7 +354,7 @@ export default function QuizScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 },
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
         ]}
       >
         {/* Header */}
@@ -273,74 +396,78 @@ export default function QuizScreen() {
         </ThemedText>
 
         {/* Question */}
-        <Animated.View style={animatedQuestionStyle}>
+        <View>
           <ThemedText style={styles.questionText}>
             {currentQuestion.question}
           </ThemedText>
           
           {renderQuestion()}
-        </Animated.View>
+        </View>
 
-        {/* Submit Button */}
-        {!showResult && (
-          <Pressable
-            onPress={checkAnswer}
-            disabled={!answers[currentQuestion.id]}
-            style={[
-              styles.submitButton,
-              !answers[currentQuestion.id] && styles.submitButtonDisabled,
-            ]}
-          >
-            <LinearGradient
-              colors={answers[currentQuestion.id] 
-                ? ['#2196F3', '#1976D2']
-                : ['#ccc', '#aaa']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.submitGradient}
-            />
-            <ThemedText style={styles.submitText}>
-              Check Answer
-            </ThemedText>
-          </Pressable>
-        )}
-
-        {/* Result */}
-        {showResult && (
-          <Animated.View style={[styles.resultContainer, animatedResultStyle]}>
-            <View style={[
-              styles.resultCard,
-              isCorrect ? styles.resultCardCorrect : styles.resultCardIncorrect,
-            ]}>
+        {/* Submit/Next Button */}
+        <Pressable
+          onPress={showResult ? nextQuestion : checkAnswer}
+          disabled={!showResult && !answers[currentQuestion.id]}
+          style={[
+            styles.submitButton,
+            isDark ? styles.submitButtonDark : styles.submitButtonLight,
+            !showResult && !answers[currentQuestion.id] && styles.submitButtonDisabled,
+            showResult && isCorrect && styles.submitButtonCorrect,
+            showResult && !isCorrect && styles.submitButtonIncorrect,
+          ]}
+        >
+          <BlurView
+            tint={isDark ? 'dark' : 'light'}
+            intensity={24}
+            style={styles.submitBlur}
+          />
+          <LinearGradient
+            colors={
+              showResult && isCorrect
+                ? ['rgba(76,175,80,0.15)', 'rgba(76,175,80,0.08)']
+                : showResult && !isCorrect
+                ? ['rgba(244,67,54,0.15)', 'rgba(244,67,54,0.08)']
+                : answers[currentQuestion.id] 
+                ? ['rgba(33,150,243,0.15)', 'rgba(33,150,243,0.08)']
+                : ['rgba(128,128,128,0.1)', 'rgba(128,128,128,0.05)']
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.submitGradient}
+          />
+          
+          {showResult && (
+            <View style={styles.resultIconContainer}>
               <HugeiconsIcon
-                icon={isCorrect ? CheckmarkCircle02Icon : Cancel02Icon}
-                size={48}
+                icon={isCorrect ? CheckmarkCircle02Icon : CancelCircleIcon}
+                size={24}
                 color={isCorrect ? '#4CAF50' : '#F44336'}
               />
-              <ThemedText style={styles.resultText}>
-                {isCorrect ? 'Correct!' : 'Incorrect'}
-              </ThemedText>
-              
-              {!isCorrect && currentQuestion.explanation && (
-                <ThemedText style={styles.explanation}>
-                  {currentQuestion.explanation}
-                </ThemedText>
-              )}
-              
-              <Pressable
-                onPress={nextQuestion}
-                style={styles.nextButton}
-              >
-                <ThemedText style={styles.nextButtonText}>
-                  {currentQuestionIndex < chapter.quiz.questions.length - 1 
-                    ? 'Next Question' 
-                    : 'Finish Quiz'
-                  }
-                </ThemedText>
-              </Pressable>
             </View>
-          </Animated.View>
+          )}
+          
+          <ThemedText style={[
+            styles.submitText,
+            !showResult && !answers[currentQuestion.id] && styles.submitTextDisabled,
+            showResult && isCorrect && styles.submitTextCorrect,
+            showResult && !isCorrect && styles.submitTextIncorrect,
+          ]}>
+            {showResult 
+              ? (currentQuestionIndex < chapter.quiz.questions.length - 1 
+                  ? 'Next Question' 
+                  : 'Finish Quiz')
+              : 'Check Answer'
+            }
+          </ThemedText>
+        </Pressable>
+        
+        {/* Explanation */}
+        {showResult && !isCorrect && currentQuestion.explanation && (
+          <View style={styles.explanationContainer}>
+            <ThemedText style={styles.explanation}>
+              {currentQuestion.explanation}
+            </ThemedText>
+          </View>
         )}
       </ScrollView>
     </GestureHandlerRootView>
@@ -408,6 +535,7 @@ function MultiSelectQuestion({ question, selectedAnswers, onSelectAnswers, showR
       {question.options?.map((option: string, index: number) => {
         const isSelected = selectedAnswers.includes(option);
         const isCorrect = (question.correctAnswer as string[]).includes(option);
+        const showCheckbox = isSelected || (showResult && isCorrect);
         
         return (
           <Pressable
@@ -417,22 +545,23 @@ function MultiSelectQuestion({ question, selectedAnswers, onSelectAnswers, showR
             style={[
               styles.optionCard,
               isDark ? styles.optionCardDark : styles.optionCardLight,
-              isSelected && styles.optionCardSelected,
+              isSelected && !showResult && styles.optionCardSelected,
               showResult && isCorrect && styles.optionCardCorrect,
               showResult && isSelected && !isCorrect && styles.optionCardIncorrect,
             ]}
           >
             <View style={[
               styles.checkbox,
-              isSelected && styles.checkboxSelected,
+              isSelected && !showResult && styles.checkboxSelected,
               showResult && isCorrect && styles.checkboxCorrect,
               showResult && isSelected && !isCorrect && styles.checkboxIncorrect,
             ]}>
-              {isSelected && (
+              {showCheckbox && (
                 <HugeiconsIcon
-                  icon={CheckmarkCircle02Icon}
+                  icon={Tick02Icon}
                   size={16}
                   color="#fff"
+                  strokeWidth={3}
                 />
               )}
             </View>
@@ -451,19 +580,20 @@ function MultiSelectQuestion({ question, selectedAnswers, onSelectAnswers, showR
   );
 }
 
-// Matching Component with Drag and Drop
+// Matching Component
 function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDark }: any) {
-  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [selectedConcept, setSelectedConcept] = useState<string | null>(null);
   
-  const handleDrop = (conceptId: string, definitionId: string) => {
+  const handleMatch = (conceptId: string, definitionId: string) => {
     onUpdateMatches({ ...matches, [conceptId]: definitionId });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedConcept(null);
   };
 
   return (
     <View style={styles.matchingContainer}>
       <ThemedText style={styles.instructionText}>
-        Drag definitions to match with concepts
+        Tap a concept, then tap its matching definition
       </ThemedText>
       
       <View style={styles.matchingColumns}>
@@ -480,11 +610,19 @@ function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDa
               );
             
             return (
-              <View
+              <Pressable
                 key={concept.id}
+                disabled={showResult || !!matchedDefId}
+                onPress={() => {
+                  if (!showResult && !matchedDefId) {
+                    setSelectedConcept(concept.id);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }
+                }}
                 style={[
                   styles.conceptCard,
                   isDark ? styles.matchCardDark : styles.matchCardLight,
+                  selectedConcept === concept.id && styles.conceptCardActive,
                   showResult && isCorrect && styles.matchCardCorrect,
                   showResult && matchedDefId && !isCorrect && styles.matchCardIncorrect,
                 ]}
@@ -512,7 +650,7 @@ function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDa
                         style={styles.removeMatch}
                       >
                         <HugeiconsIcon
-                          icon={Cancel02Icon}
+                          icon={CancelCircleIcon}
                           size={16}
                           color={isDark ? '#fff' : '#000'}
                         />
@@ -520,7 +658,7 @@ function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDa
                     )}
                   </View>
                 )}
-              </View>
+              </Pressable>
             );
           })}
         </View>
@@ -535,16 +673,16 @@ function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDa
             return (
               <Pressable
                 key={definition.id}
+                disabled={showResult || !selectedConcept}
                 onPress={() => {
-                  if (!showResult && draggedItem) {
-                    handleDrop(draggedItem, definition.id);
-                    setDraggedItem(null);
+                  if (!showResult && selectedConcept) {
+                    handleMatch(selectedConcept, definition.id);
                   }
                 }}
                 style={[
                   styles.definitionCard,
                   isDark ? styles.matchCardDark : styles.matchCardLight,
-                  draggedItem && styles.definitionCardActive,
+                  selectedConcept && styles.definitionCardActive,
                 ]}
               >
                 <ThemedText style={styles.definitionText}>
@@ -559,7 +697,10 @@ function MatchingQuestion({ question, matches, onUpdateMatches, showResult, isDa
       {!showResult && (
         <View style={styles.matchingInstructions}>
           <ThemedText style={styles.matchingInstructionText}>
-            Tap a definition, then tap the matching concept
+            {selectedConcept 
+              ? 'Now tap the matching definition on the right'
+              : 'Tap a concept to select it'
+            }
           </ThemedText>
         </View>
       )}
@@ -712,6 +853,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
   },
+  conceptCardActive: {
+    borderColor: '#2196F3',
+    borderWidth: 2,
+    backgroundColor: 'rgba(33,150,243,0.05)',
+  },
   matchCardLight: {
     backgroundColor: 'rgba(0,0,0,0.05)',
     borderColor: 'rgba(0,0,0,0.1)',
@@ -782,56 +928,73 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     marginTop: 20,
+    padding: 20,
+    borderWidth: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitButtonLight: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderColor: 'rgba(33,150,243,0.3)',
+  },
+  submitButtonDark: {
+    backgroundColor: 'rgba(16,16,16,0.5)',
+    borderColor: 'rgba(33,150,243,0.4)',
   },
   submitButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
+    borderColor: 'rgba(128,128,128,0.2)',
+  },
+  submitButtonCorrect: {
+    borderColor: '#4CAF50',
+    borderWidth: 2,
+  },
+  submitButtonIncorrect: {
+    borderColor: '#F44336',
+    borderWidth: 2,
+  },
+  submitBlur: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
   },
   submitGradient: {
-    paddingVertical: 16,
-    alignItems: 'center',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  resultIconContainer: {
+    marginRight: 12,
   },
   submitText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#fff',
+    textAlign: 'center',
   },
-  resultContainer: {
-    marginTop: 20,
+  submitTextDisabled: {
+    opacity: 0.5,
   },
-  resultCard: {
-    padding: 24,
-    borderRadius: 20,
-    alignItems: 'center',
+  submitTextCorrect: {
+    color: '#4CAF50',
   },
-  resultCardCorrect: {
-    backgroundColor: 'rgba(76,175,80,0.1)',
+  submitTextIncorrect: {
+    color: '#F44336',
   },
-  resultCardIncorrect: {
-    backgroundColor: 'rgba(244,67,54,0.1)',
-  },
-  resultText: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 12,
+  explanationContainer: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(244,67,54,0.05)',
   },
   explanation: {
     fontSize: 14,
-    opacity: 0.7,
-    textAlign: 'center',
-    marginTop: 12,
-    paddingHorizontal: 20,
-  },
-  nextButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    backgroundColor: '#2196F3',
-  },
-  nextButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    opacity: 0.8,
+    lineHeight: 20,
   },
   finalScoreContainer: {
     flex: 1,
@@ -841,53 +1004,175 @@ const styles = StyleSheet.create({
   },
   finalScoreContent: {
     alignItems: 'center',
+    width: '100%',
   },
   scoreCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-  },
-  scoreCirclePassed: {
     backgroundColor: 'rgba(76,175,80,0.2)',
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#4CAF50',
   },
-  scoreCircleFailed: {
-    backgroundColor: 'rgba(244,67,54,0.2)',
-    borderWidth: 3,
-    borderColor: '#F44336',
-  },
   finalScoreText: {
-    fontSize: 48,
+    fontSize: 56,
     fontWeight: '800',
+    lineHeight: 64,
   },
   finalTitle: {
-    fontSize: 28,
-    marginBottom: 12,
+    fontSize: 32,
+    marginBottom: 16,
+    fontWeight: '700',
   },
   finalMessage: {
-    fontSize: 16,
+    fontSize: 18,
     textAlign: 'center',
-    opacity: 0.7,
+    opacity: 0.8,
     marginBottom: 32,
-    lineHeight: 24,
+    lineHeight: 26,
+    fontWeight: '600',
+    paddingHorizontal: 20,
   },
   finishButton: {
     paddingVertical: 16,
     paddingHorizontal: 48,
     borderRadius: 24,
-  },
-  finishButtonPassed: {
     backgroundColor: '#4CAF50',
-  },
-  finishButtonFailed: {
-    backgroundColor: '#F44336',
   },
   finishButtonText: {
     fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  introBackButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  introCard: {
+    borderRadius: 28,
+    padding: 28,
+    marginBottom: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  introCardLight: {
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    borderColor: 'rgba(0,0,0,0.06)',
+  },
+  introCardDark: {
+    backgroundColor: 'rgba(16,16,16,0.55)',
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  introCardBlur: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 28,
+  },
+  introCardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 28,
+  },
+  chapterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  chapterBadgeLight: {
+    backgroundColor: 'rgba(33,150,243,0.1)',
+    borderColor: 'rgba(33,150,243,0.2)',
+  },
+  chapterBadgeDark: {
+    backgroundColor: 'rgba(33,150,243,0.15)',
+    borderColor: 'rgba(33,150,243,0.25)',
+  },
+  chapterBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: '#2196F3',
+  },
+  introCardTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    lineHeight: 34,
+    marginBottom: 12,
+  },
+  introCardSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
+    opacity: 0.7,
+    marginBottom: 16,
+  },
+  introCardDescription: {
+    fontSize: 15,
+    lineHeight: 24,
+    opacity: 0.75,
+    marginBottom: 28,
+  },
+  introStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128,128,128,0.15)',
+  },
+  introStatItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  introStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  introStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    opacity: 0.5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  startButton: {
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    borderRadius: 24,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  startButtonPressed: {
+    opacity: 0.9,
+  },
+  startButtonGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  startButtonText: {
+    fontSize: 17,
     fontWeight: '700',
     color: '#fff',
   },

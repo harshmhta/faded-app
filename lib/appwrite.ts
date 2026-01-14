@@ -7,6 +7,7 @@ export const appwriteConfig = {
   platform: process.env.EXPO_PUBLIC_APPWRITE_PLATFORM,
   databaseId: process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID || "faded-database",
   moodCheckInsCollectionId: process.env.EXPO_PUBLIC_APPWRITE_MOOD_COLLECTION_ID || "mood-check-ins",
+  sobrietyTimerCollectionId: process.env.EXPO_PUBLIC_APPWRITE_SOBRIETY_TIMER_COLLECTION_ID || "sobriety-timer",
 };
 
 // Initialize Appwrite client
@@ -140,6 +141,98 @@ export const moodCheckInService = {
     } catch (error) {
       console.error("Error fetching mood check-ins by date range:", error);
       return [];
+    }
+  },
+};
+
+// Sobriety timer types
+export interface SobrietyTimer {
+  $id?: string;
+  userId: string;
+  startTime: string; // ISO timestamp
+  $createdAt?: string;
+  $updatedAt?: string;
+  $permissions?: string[];
+}
+
+// Sobriety timer database functions
+export const sobrietyTimerService = {
+  // Get or create sobriety timer for user
+  async getSobrietyTimer(userId: string): Promise<SobrietyTimer | null> {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.sobrietyTimerCollectionId,
+        [
+          Query.equal('userId', userId),
+          Query.limit(1),
+        ]
+      );
+      
+      if (response.documents.length > 0) {
+        return response.documents[0] as SobrietyTimer;
+      }
+      
+      // Create initial timer if it doesn't exist
+      const newTimer = await databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.sobrietyTimerCollectionId,
+        ID.unique(),
+        {
+          userId,
+          startTime: new Date().toISOString(),
+        },
+        [
+          Permission.read(Role.user(userId)),
+          Permission.update(Role.user(userId)),
+          Permission.delete(Role.user(userId)),
+        ]
+      );
+      return newTimer as SobrietyTimer;
+    } catch (error) {
+      console.error("Error fetching sobriety timer:", error);
+      return null;
+    }
+  },
+
+  // Reset sobriety timer with new start time
+  async resetSobrietyTimer(userId: string, startTime: string): Promise<SobrietyTimer | null> {
+    try {
+      // Get existing timer
+      const existing = await this.getSobrietyTimer(userId);
+      
+      if (!existing || !existing.$id) {
+        // Create new timer if it doesn't exist
+        const newTimer = await databases.createDocument(
+          appwriteConfig.databaseId,
+          appwriteConfig.sobrietyTimerCollectionId,
+          ID.unique(),
+          {
+            userId,
+            startTime,
+          },
+          [
+            Permission.read(Role.user(userId)),
+            Permission.update(Role.user(userId)),
+            Permission.delete(Role.user(userId)),
+          ]
+        );
+        return newTimer as SobrietyTimer;
+      }
+      
+      // Update existing timer
+      const updated = await databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.sobrietyTimerCollectionId,
+        existing.$id,
+        {
+          startTime,
+        }
+      );
+      return updated as SobrietyTimer;
+    } catch (error) {
+      console.error("Error resetting sobriety timer:", error);
+      return null;
     }
   },
 };
