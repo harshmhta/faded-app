@@ -6,13 +6,13 @@ import { useCourseProgress } from '@/contexts/CourseProgressContext';
 import { getCourseChapter } from '@/data/courseContent';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {
-  ArrowLeft01Icon,
-  Award01Icon,
-  CheckmarkCircle02Icon,
-  QuizIcon,
-  SquareLockPasswordIcon,
-  Time04Icon,
-  ThumbsUpIcon
+    ArrowLeft01Icon,
+    Award01Icon,
+    CheckmarkCircle02Icon,
+    QuizIcon,
+    SquareLockPasswordIcon,
+    ThumbsUpIcon,
+    Time04Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react-native';
 import { BlurView } from 'expo-blur';
@@ -20,16 +20,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import Animated, {
-  FadeInDown,
+    FadeInDown,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ export default function ChapterDetailScreen() {
   const chapterNumber = parseInt(id as string);
   const chapter = getCourseChapter(chapterNumber);
   
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const { progress, isSectionCompleted } = useCourseProgress();
@@ -68,33 +70,37 @@ export default function ChapterDetailScreen() {
     <>
       <Stack.Screen
         options={{
-          title: `Chapter ${chapter.number}`,
-          headerShown: true,
-          headerTransparent: false,
-          headerTitleStyle: {
-            fontSize: 18,
-            fontFamily: FontFamily.medium,
-          },
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.headerButton}
-            >
-              <HugeiconsIcon
-                icon={ArrowLeft01Icon}
-                size={24}
-                color={Colors[colorScheme].text}
-                strokeWidth={2.0}
-              />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
         }}
       />
       <ThemedView style={styles.container}>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 10 },
+          ]}
         >
+          {/* Header with Back Button and Title */}
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft01Icon}
+                size={24}
+                color={isDark ? '#fff' : '#000'}
+              />
+            </Pressable>
+            
+            <View style={styles.headerContent}>
+              <ThemedText style={styles.chapterHeaderTitle}>
+                Chapter {chapter.number}
+              </ThemedText>
+            </View>
+          </View>
+
           {/* Chapter Info */}
           <View style={styles.headerSection}>
             <ThemedText type="title" style={styles.chapterTitle}>
@@ -284,14 +290,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  headerButton: {
-    padding: 8,
-    marginLeft: -4,
+  header: {
+    position: 'relative',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    padding: 8,
+    zIndex: 1,
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  chapterHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '500',
+    fontFamily: FontFamily.medium,
+    textAlign: 'center',
   },
   headerSection: {
-    paddingTop: 20,
+    paddingTop: 0,
     paddingBottom: 24,
   },
   chapterTitle: {

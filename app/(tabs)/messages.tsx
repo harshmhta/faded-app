@@ -11,17 +11,24 @@ import {
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+interface CachedData {
+  posts: RedditPost[];
+  timestamp: number;
+}
 
 export default function MessagesScreen() {
   const insets = useSafeAreaInsets();
@@ -33,23 +40,73 @@ export default function MessagesScreen() {
   );
   const [posts, setPosts] = useState<RedditPost[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<RedditPost | null>(null);
   const [showPostModal, setShowPostModal] = useState(false);
 
-  const loadPosts = async (subreddit: string, isRefresh = false) => {
+  const getCacheKey = (subreddit: string) => `reddit_posts_${subreddit}`;
+
+  const loadCachedPosts = async (subreddit: string): Promise<RedditPost[] | null> => {
     try {
-      if (!isRefresh) setLoading(true);
+      const cacheKey = getCacheKey(subreddit);
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+      
+      if (cachedData) {
+        const { posts, timestamp }: CachedData = JSON.parse(cachedData);
+        const now = Date.now();
+        
+        // Check if cache is still valid (less than 30 minutes old)
+        if (now - timestamp < CACHE_DURATION) {
+          return posts;
+        }
+      }
+      
+      return null;
+    } catch (err) {
+      console.error("Error loading cached posts:", err);
+      return null;
+    }
+  };
+
+  const saveCachedPosts = async (subreddit: string, posts: RedditPost[]) => {
+    try {
+      const cacheKey = getCacheKey(subreddit);
+      const cacheData: CachedData = {
+        posts,
+        timestamp: Date.now(),
+      };
+      await AsyncStorage.setItem(cacheKey, JSON.stringify(cacheData));
+    } catch (err) {
+      console.error("Error saving cached posts:", err);
+    }
+  };
+
+  const loadPosts = async (subreddit: string, forceRefresh = false) => {
+    try {
+      setLoading(true);
       setError(null);
+
+      // Try to load from cache first (unless force refresh)
+      if (!forceRefresh) {
+        const cachedPosts = await loadCachedPosts(subreddit);
+        if (cachedPosts) {
+          setPosts(cachedPosts);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fetch fresh data from Reddit
       const fetchedPosts = await fetchSubredditPosts(subreddit, "hot", 20);
       setPosts(fetchedPosts);
+      
+      // Cache the fresh data
+      await saveCachedPosts(subreddit, fetchedPosts);
     } catch (err) {
       setError("Failed to load posts. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -65,7 +122,6 @@ export default function MessagesScreen() {
 
   const handleRefresh = () => {
     if (selectedSubreddit) {
-      setRefreshing(true);
       loadPosts(selectedSubreddit, true);
     }
   };
@@ -249,13 +305,6 @@ export default function MessagesScreen() {
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            enabled={!!selectedSubreddit}
-          />
-        }
       />
 
       {loading && (
@@ -278,7 +327,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 100,
   },
   headerContent: {
     paddingHorizontal: 20,

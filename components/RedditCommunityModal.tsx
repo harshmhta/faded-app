@@ -4,8 +4,8 @@ import { Colors } from "@/constants/Colors";
 import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import {
-  CheckmarkCircle02Icon,
-  MinusSignCircleIcon,
+    CheckmarkCircle02Icon,
+    MinusSignCircleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import React from "react";

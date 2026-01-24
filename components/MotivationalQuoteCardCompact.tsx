@@ -179,13 +179,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   contentContainer: {
-    padding: 18,
+    padding: 16,
+    minHeight: 120,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   iconBadge: {
     width: 28,
@@ -204,17 +205,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
   },
   quoteSection: {
-    gap: 8,
+    gap: 6,
+    minHeight: 70,
+    justifyContent: "flex-start",
   },
   quoteText: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: FontFamily.medium,
-    lineHeight: 24,
+    lineHeight: 22,
     letterSpacing: 0.2,
+    minHeight: 44,
   },
   authorText: {
     fontSize: 13,
     fontFamily: FontFamily.regular,
     opacity: 0.7,
+    minHeight: 18,
   },
 });

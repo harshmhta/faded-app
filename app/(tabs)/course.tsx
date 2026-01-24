@@ -271,7 +271,7 @@ export default function CourseScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: insets.bottom + 100 },
+          { paddingBottom: insets.bottom + 50 },
         ]}
         showsVerticalScrollIndicator={false}
       />

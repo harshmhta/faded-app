@@ -17,6 +17,8 @@ import {
 } from "react-native";
 import { ConsumptionStatus } from "./DailyConsumptionLogger";
 import { ThemedText } from "./ThemedText";
+import { useConsumption } from "@/contexts/ConsumptionContext";
+import { router, useFocusEffect } from "expo-router";
 
 const { width: screenWidth } = Dimensions.get("window");
 const WEEK_WIDTH = screenWidth - 40; // Account for padding
@@ -35,6 +37,7 @@ export default function WeeklyCalendar({
 }: WeeklyCalendarProps) {
   const textColor = useThemeColor({}, "text");
   const colorScheme = useColorScheme() ?? "light";
+  const { consumptionHistory, loadConsumptionHistory } = useConsumption();
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentWeekIndex, setCurrentWeekIndex] = useState(3); // Start at week 3 (current week)
   const today = new Date();
@@ -70,14 +73,25 @@ export default function WeeklyCalendar({
   const [weeks] = useState(generateWeeks());
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
+  // Load consumption history on mount
+  useEffect(() => {
+    const startDate = new Date(weeks[0][0]);
+    const endDate = new Date(weeks[weeks.length - 1][6]);
+    loadConsumptionHistory(
+      startDate.toISOString().split("T")[0],
+      endDate.toISOString().split("T")[0]
+    );
+  }, [loadConsumptionHistory]);
+
   // Check if a date is today
   const isToday = (date: Date) => {
     return date.toDateString() === today.toDateString();
   };
 
-  // Check if date matches consumption status date
-  const isConsumptionDate = (date: Date) => {
-    return consumptionStatus?.date === date.toDateString();
+  // Check if date has consumption tracking
+  const getConsumptionForDate = (date: Date) => {
+    const dateStr = date.toISOString().split("T")[0];
+    return consumptionHistory.get(dateStr);
   };
 
   // Snap to current week on mount
@@ -122,8 +136,10 @@ export default function WeeklyCalendar({
         const date = weekDates[dayIndex];
         const isTodayDate = isToday(date);
         const isSelected = selectedDate?.toDateString() === date.toDateString();
-        const hasConsumptionStatus = isConsumptionDate(date);
-        const consumed = hasConsumptionStatus ? consumptionStatus?.consumed : null;
+        const tracking = getConsumptionForDate(date);
+        const hasTracking = tracking !== undefined;
+        const isClean = hasTracking && tracking.status === "clean";
+        const isSmoked = hasTracking && tracking.status === "smoked";
 
         return (
           <Pressable
@@ -137,6 +153,12 @@ export default function WeeklyCalendar({
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               }
               onDateSelect?.(date);
+              
+              // If date has no tracking, navigate to track-consumption with this date
+              if (!hasTracking) {
+                const dateStr = date.toISOString().split("T")[0];
+                router.push(`/track-consumption?date=${dateStr}`);
+              }
             }}
           >
             <View
@@ -144,44 +166,31 @@ export default function WeeklyCalendar({
                 styles.dayCircle,
                 isTodayDate ? styles.todayCircle : styles.otherDayCircle,
                 {
-                  borderColor: hasConsumptionStatus
-                    ? consumed
-                      ? "#FF6B6B"
-                      : "#4CAF50"
+                  borderColor: hasTracking
+                    ? isClean
+                      ? "#4CAF50"
+                      : "#F44336"
                     : isTodayDate
                     ? colorScheme === "dark"
                       ? "#FFFFFF"
                       : "#000000"
                     : "rgba(160, 160, 160, 0.6)",
-                  backgroundColor: hasConsumptionStatus
-                    ? consumed
-                      ? "#FF6B6B20"
-                      : "#4CAF5020"
+                  backgroundColor: hasTracking
+                    ? isClean
+                      ? colorScheme === "dark"
+                        ? "rgba(76, 175, 80, 0.3)"
+                        : "rgba(76, 175, 80, 0.25)"
+                      : colorScheme === "dark"
+                        ? "rgba(244, 67, 54, 0.3)"
+                        : "rgba(244, 67, 54, 0.25)"
                     : "transparent",
+                  borderStyle: hasTracking ? "solid" : "dashed",
                 },
               ]}
             >
-              {hasConsumptionStatus ? (
-                consumed ? (
-                  <HugeiconsIcon
-                    icon={CancelCircleIcon}
-                    size={20}
-                    color="#FF6B6B"
-                    strokeWidth={2}
-                  />
-                ) : (
-                  <HugeiconsIcon
-                    icon={CheckmarkCircleIcon}
-                    size={20}
-                    color="#4CAF50"
-                    strokeWidth={2}
-                  />
-                )
-              ) : (
-                <ThemedText style={[styles.dayLabel, { color: textColor }]}>
-                  {dayLabel}
-                </ThemedText>
-              )}
+              <ThemedText style={[styles.dayLabel, { color: textColor }]}>
+                {dayLabel}
+              </ThemedText>
             </View>
             <ThemedText
               style={[

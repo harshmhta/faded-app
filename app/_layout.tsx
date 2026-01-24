@@ -16,8 +16,9 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { StartupScreen } from "@/components/StartupScreen";
 import { Colors } from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
+import { ConsumptionProvider } from "@/contexts/ConsumptionContext";
 import { CourseProgressProvider } from "@/contexts/CourseProgressContext";
+import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
 export default function RootLayout() {
   const [loaded] = useFonts({
@@ -50,12 +51,13 @@ export default function RootLayout() {
     <KeyboardProvider>
       <ThemeProvider>
         <AuthProvider>
-          <CourseProgressProvider>
-            <ThemeWrapper>
-              {showStartup ? (
-                <StartupScreen onAnimationComplete={handleStartupComplete} />
-              ) : (
-                <ProtectedRoute>
+          <ConsumptionProvider>
+            <CourseProgressProvider>
+              <ThemeWrapper>
+                {showStartup ? (
+                  <StartupScreen onAnimationComplete={handleStartupComplete} />
+                ) : (
+                  <ProtectedRoute>
                 <Stack
                   screenOptions={{
                     contentStyle: { backgroundColor: "transparent" },
@@ -82,6 +84,14 @@ export default function RootLayout() {
                   />
                   <Stack.Screen
                     name="check-in"
+                    options={{ 
+                      presentation: "modal",
+                      headerShown: false,
+                      animation: "slide_from_bottom"
+                    }}
+                  />
+                  <Stack.Screen
+                    name="track-consumption"
                     options={{ 
                       presentation: "modal",
                       headerShown: false,
@@ -117,10 +127,11 @@ export default function RootLayout() {
                     options={{ headerShown: false }}
                   />
                 </Stack>
-              </ProtectedRoute>
-            )}
-          </ThemeWrapper>
-          </CourseProgressProvider>
+                </ProtectedRoute>
+              )}
+            </ThemeWrapper>
+            </CourseProgressProvider>
+          </ConsumptionProvider>
         </AuthProvider>
       </ThemeProvider>
     </KeyboardProvider>

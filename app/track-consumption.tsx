@@ -4,24 +4,27 @@ import { Colors } from "@/constants/Colors";
 import { FontFamily } from "@/constants/Fonts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { MoodCheckIn, moodCheckInService } from "@/lib/appwrite";
-import { Cancel01Icon, AngelIcon, SmileIcon, ConfusedIcon, CryingIcon, DeadIcon } from "@hugeicons/core-free-icons";
+import { sobrietyTimerService } from "@/lib/appwrite";
+import { Cancel01Icon, CancelCircleHalfDotIcon, FirePitIcon } from "@hugeicons/core-free-icons";
+import { useConsumption } from "@/contexts/ConsumptionContext";
 import { HugeiconsIcon } from "@hugeicons/react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   InputAccessoryView,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
-  View,
+  View
 } from "react-native";
 import {
   KeyboardAwareScrollView,
@@ -34,30 +37,33 @@ const { width: screenWidth } = Dimensions.get("window");
 const WEEK_WIDTH = screenWidth - 75;
 const WEEK_SPACING = 30;
 
-const MOOD_OPTIONS = [
-  { id: "great", icon: AngelIcon, label: "Great", color: "#2196F3" },      // Blue (matches Log Mood button)
-  { id: "good", icon: SmileIcon, label: "Good", color: "#76FF03" },        // Bright lime
-  { id: "okay", icon: ConfusedIcon, label: "Okay", color: "#FFD600" },     // Bright yellow
-  { id: "bad", icon: CryingIcon, label: "Bad", color: "#FF6D00" },         // Deep orange
-  { id: "struggling", icon: DeadIcon, label: "Struggling", color: "#DD2C00" }, // Deep red
+const CONSUMPTION_OPTIONS = [
+  { id: "clean", icon: CancelCircleHalfDotIcon, label: "Didn't Smoke", color: "#4CAF50" },
+  { id: "smoked", icon: FirePitIcon, label: "Smoked", color: "#F44336" },
 ];
 
-export default function CheckInScreen() {
+export default function TrackConsumptionScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const { user } = useAuth();
+  const params = useLocalSearchParams();
+  const { consumptionHistory, loadConsumptionHistory, saveConsumption, isLoading: isLoadingHistory } = useConsumption();
 
-  const [selectedMood, setSelectedMood] = useState<string | null>(null);
+  // Parse date from URL params if provided
+  const initialDate = params.date 
+    ? new Date(params.date as string + 'T00:00:00')
+    : new Date();
+
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(initialDate);
   const [currentWeekIndex, setCurrentWeekIndex] = useState(3);
-  const [moodHistory, setMoodHistory] = useState<Map<string, MoodCheckIn>>(
-    new Map()
-  );
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [isResettingTimer, setIsResettingTimer] = useState(false);
+  const [resetStartTime, setResetStartTime] = useState<Date>(new Date());
 
   const scrollViewRef = useRef<ScrollView>(null);
   const calendarScrollRef = useRef<ScrollView>(null);
@@ -130,52 +136,30 @@ export default function CheckInScreen() {
   const [weeks] = useState(generateWeeks());
   const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
 
-  // Load mood history
+  // Load consumption history on mount
   useEffect(() => {
-    loadMoodHistory();
-  }, [user]);
+    const startDate = new Date(weeks[0][0]);
+    const endDate = new Date(weeks[weeks.length - 1][6]);
+    loadConsumptionHistory(
+      startDate.toISOString().split("T")[0],
+      endDate.toISOString().split("T")[0]
+    );
+  }, []);
 
-  // Load mood for selected date
+  // Load consumption for selected date
   useEffect(() => {
-    loadMoodForDate(selectedDate);
-  }, [selectedDate, moodHistory]);
+    loadConsumptionForDate(selectedDate);
+  }, [selectedDate, consumptionHistory]);
 
-  const loadMoodHistory = async () => {
-    if (!user) return;
-
-    setIsLoadingHistory(true);
-    try {
-      const startDate = new Date(weeks[0][0]);
-      const endDate = new Date(weeks[weeks.length - 1][6]);
-
-      const checkIns = await moodCheckInService.getMoodCheckInsByDateRange(
-        user.$id,
-        startDate.toISOString().split("T")[0],
-        endDate.toISOString().split("T")[0]
-      );
-
-      const historyMap = new Map<string, MoodCheckIn>();
-      checkIns.forEach((checkIn) => {
-        historyMap.set(checkIn.date, checkIn);
-      });
-
-      setMoodHistory(historyMap);
-    } catch (error) {
-      console.error("Error loading mood history:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  const loadMoodForDate = (date: Date) => {
+  const loadConsumptionForDate = (date: Date) => {
     const dateStr = date.toISOString().split("T")[0];
-    const checkIn = moodHistory.get(dateStr);
+    const tracking = consumptionHistory.get(dateStr);
 
-    if (checkIn) {
-      setSelectedMood(checkIn.mood);
-      setComment(checkIn.comment || "");
+    if (tracking) {
+      setSelectedStatus(tracking.status);
+      setComment(tracking.comment || "");
     } else {
-      setSelectedMood(null);
+      setSelectedStatus(null);
       setComment("");
     }
   };
@@ -198,40 +182,87 @@ export default function CheckInScreen() {
     return dateOnly > todayOnly;
   };
 
-  const handleSaveMood = async () => {
-    if (!selectedMood || !user) return;
+  const handleSaveConsumption = async () => {
+    if (!selectedStatus || !user) return;
 
     if (isFutureDate(selectedDate)) {
       return;
     }
+
+    // If user selected "smoked" and it's today, show reset modal
+    if (selectedStatus === "smoked" && isToday(selectedDate)) {
+      setResetStartTime(new Date());
+      setShowResetModal(true);
+      return;
+    }
+
+    // Otherwise save directly
+    await saveConsumptionTracking();
+  };
+
+  const saveConsumptionTracking = async () => {
+    if (!selectedStatus || !user) return;
 
     setIsSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       const dateStr = selectedDate.toISOString().split("T")[0];
-      await moodCheckInService.saveMoodCheckIn(
-        user.$id,
-        selectedMood,
-        comment,
-        dateStr
-      );
-      await loadMoodHistory();
+      
+      // Use context's optimistic update
+      await saveConsumption(selectedStatus, comment, dateStr);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Close modal after successful save if it's today
       if (isToday(selectedDate)) {
         setTimeout(() => {
-          router.back();
-        }, 500);
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/(tabs)');
+          }
+        }, 300);
       }
     } catch (error) {
-      console.error("Error saving mood:", error);
+      console.error("Error saving consumption:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleResetTimer = async () => {
+    if (!user) return;
+
+    setIsResettingTimer(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
+    try {
+      // Reset the sobriety timer with selected time
+      await sobrietyTimerService.resetSobrietyTimer(user.$id, resetStartTime.toISOString());
+
+      // Save the consumption tracking
+      await saveConsumptionTracking();
+
+      setShowResetModal(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Navigate back to home with refresh flag
+      setTimeout(() => {
+        router.replace('/(tabs)?refreshTimer=true');
+      }, 300);
+    } catch (error) {
+      console.error("Error resetting timer:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsResettingTimer(false);
+    }
+  };
+
+  const handleGoBack = () => {
+    setShowResetModal(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   // Scroll to current week when calendar is ready
@@ -287,8 +318,8 @@ export default function CheckInScreen() {
         const isSelected =
           selectedDate?.toDateString() === date.toDateString();
         const dateStr = date.toISOString().split("T")[0];
-        const hasMood = moodHistory.has(dateStr);
-        const moodForDate = moodHistory.get(dateStr);
+        const hasTracking = consumptionHistory.has(dateStr);
+        const trackingForDate = consumptionHistory.get(dateStr);
 
         return (
           <Pressable
@@ -310,16 +341,19 @@ export default function CheckInScreen() {
                 isSelected && styles.selectedDayCircle,
                 {
                   backgroundColor:
-                    hasMood && moodForDate
-                      ? (() => {
-                          const moodColor = getMoodColor(moodForDate.mood);
-                          return isDark
-                            ? `${moodColor}33`
-                            : `${moodColor}26`;
-                        })()
+                    hasTracking && trackingForDate
+                      ? trackingForDate.status === "clean"
+                        ? isDark
+                          ? "rgba(76, 175, 80, 0.2)"
+                          : "rgba(76, 175, 80, 0.15)"
+                        : isDark
+                          ? "rgba(244, 67, 54, 0.2)"
+                          : "rgba(244, 67, 54, 0.15)"
                       : "transparent",
-                  borderColor: hasMood && moodForDate
-                    ? getMoodColor(moodForDate.mood)
+                  borderColor: hasTracking && trackingForDate
+                    ? trackingForDate.status === "clean"
+                      ? "#4CAF50"
+                      : "#F44336"
                     : isTodayDate
                       ? isDark
                         ? "#FFFFFF"
@@ -356,14 +390,14 @@ export default function CheckInScreen() {
     </View>
   );
 
-  const getMoodColor = (moodId: string | null) => {
-    const moodOption = MOOD_OPTIONS.find((m) => m.id === moodId);
-    return moodOption?.color || "#4CAF50";
+  const getStatusColor = (status: string | null) => {
+    const statusOption = CONSUMPTION_OPTIONS.find((m) => m.id === status);
+    return statusOption?.color || "#999";
   };
 
   const isSelectedDateToday = isToday(selectedDate);
   const selectedDateStr = selectedDate.toISOString().split("T")[0];
-  const hasHistoricalMood = moodHistory.has(selectedDateStr);
+  const hasHistoricalTracking = consumptionHistory.has(selectedDateStr);
 
   return (
     <ThemedView
@@ -378,7 +412,7 @@ export default function CheckInScreen() {
         <View style={styles.dragHandle} />
         <View style={styles.headerContent}>
           <View style={styles.headerLeft} />
-          <ThemedText style={styles.headerTitle}>Daily Check-in</ThemedText>
+          <ThemedText style={styles.headerTitle}>Track Consumption</ThemedText>
           <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -422,7 +456,7 @@ export default function CheckInScreen() {
 
           <ThemedText style={styles.sectionTitle}>Your Journey</ThemedText>
           <ThemedText style={[styles.sectionSubtitle, { opacity: 0.5 }]}>
-            Scroll to view your mood history
+            Scroll to view your consumption history
           </ThemedText>
 
           {isLoadingHistory ? (
@@ -476,19 +510,19 @@ export default function CheckInScreen() {
             style={styles.sectionBlur}
           />
 
-          <ThemedText style={styles.moodTitle}>
-            How are you feeling?
+          <ThemedText style={styles.consumptionTitle}>
+            Did you smoke today?
           </ThemedText>
 
           <View style={styles.moodGrid}>
-            {MOOD_OPTIONS.map((mood, index) => {
-              const isSelected = selectedMood === mood.id;
+            {CONSUMPTION_OPTIONS.map((option, index) => {
+              const isSelected = selectedStatus === option.id;
               return (
                 <Pressable
                   key={index}
                   onPress={() => {
                     if (!isFutureDate(selectedDate)) {
-                      setSelectedMood(mood.id);
+                      setSelectedStatus(option.id);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                     }
                   }}
@@ -504,18 +538,12 @@ export default function CheckInScreen() {
                     style={[
                       styles.moodButtonInner,
                       {
-                        backgroundColor: isSelected
-                          ? isDark
-                            ? `${mood.color}25`
-                            : `${mood.color}18`
-                          : isDark 
-                            ? "rgba(255,255,255,0.04)" 
-                            : "rgba(0,0,0,0.02)",
-                        borderColor: isSelected
-                          ? mood.color
-                          : isDark
-                            ? "rgba(255,255,255,0.08)"
-                            : "rgba(0,0,0,0.06)",
+                        backgroundColor: option.id === "clean"
+                          ? (isDark ? "rgba(76, 175, 80, 0.15)" : "rgba(76, 175, 80, 0.08)")
+                          : (isDark ? "rgba(244, 67, 54, 0.15)" : "rgba(244, 67, 54, 0.08)"),
+                        borderColor: option.id === "clean"
+                          ? (isDark ? "rgba(76, 175, 80, 0.3)" : "rgba(76, 175, 80, 0.2)")
+                          : (isDark ? "rgba(244, 67, 54, 0.3)" : "rgba(244, 67, 54, 0.2)"),
                       },
                     ]}
                   >
@@ -527,11 +555,11 @@ export default function CheckInScreen() {
                     {/* Background Icon */}
                     <View style={styles.moodBackgroundIconContainer}>
                       <HugeiconsIcon
-                        icon={mood.icon}
+                        icon={option.icon}
                         size={60}
-                        color={isSelected 
-                          ? `${mood.color}20`
-                          : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"
+                        color={option.id === "clean" 
+                          ? (isDark ? "rgba(76, 175, 80, 0.08)" : "rgba(76, 175, 80, 0.06)")
+                          : (isDark ? "rgba(244, 67, 54, 0.08)" : "rgba(244, 67, 54, 0.06)")
                         }
                         strokeWidth={1.5}
                       />
@@ -542,11 +570,10 @@ export default function CheckInScreen() {
                           styles.moodLabel,
                           isSelected && {
                             fontFamily: FontFamily.bold,
-                            color: mood.color,
                           },
                         ]}
                       >
-                        {mood.label}
+                        {option.label}
                       </ThemedText>
                     </View>
                   </View>
@@ -557,7 +584,7 @@ export default function CheckInScreen() {
         </View>
 
         {/* Comment Section */}
-        {selectedMood && (
+        {selectedStatus && (
           <View
             style={[
               styles.section,
@@ -643,7 +670,7 @@ export default function CheckInScreen() {
       )}
 
       {/* Floating Save Button */}
-      {selectedMood && !isFutureDate(selectedDate) && !isKeyboardVisible && (
+      {selectedStatus && !isFutureDate(selectedDate) && !isKeyboardVisible && (
         <View
           style={[
             styles.floatingButtonContainer,
@@ -656,12 +683,12 @@ export default function CheckInScreen() {
             style={styles.floatingButtonBlur}
           />
           <Pressable
-            onPress={handleSaveMood}
+            onPress={handleSaveConsumption}
             disabled={isSaving}
             style={({ pressed }) => [
               styles.saveButton,
               {
-                backgroundColor: getMoodColor(selectedMood),
+                backgroundColor: getStatusColor(selectedStatus),
                 transform: [{ scale: pressed ? 0.98 : 1 }],
                 opacity: isSaving ? 0.7 : 1,
               },
@@ -671,16 +698,109 @@ export default function CheckInScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <ThemedText style={styles.saveButtonText}>
-                {hasHistoricalMood && !isSelectedDateToday
-                  ? "Update Check-in"
-                  : isSelectedDateToday && hasHistoricalMood
-                    ? "Update Today's Mood"
-                    : "Save Check-in"}
+                {hasHistoricalTracking && !isSelectedDateToday
+                  ? "Update Status"
+                  : isSelectedDateToday && hasHistoricalTracking
+                    ? "Update Today's Status"
+                    : "Save Status"}
               </ThemedText>
             )}
           </Pressable>
         </View>
       )}
+
+      {/* Reset Timer Modal */}
+      <Modal
+        visible={showResetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowResetModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowResetModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.resetModalContainer,
+              isDark ? styles.resetModalDark : styles.resetModalLight,
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <BlurView
+              tint={isDark ? "dark" : "light"}
+              intensity={80}
+              style={styles.resetModalBlur}
+            />
+            <View style={styles.resetModalContent}>
+              <ThemedText style={styles.resetModalTitle}>
+                Reset Sobriety Timer
+              </ThemedText>
+              <ThemedText style={styles.resetModalMessage}>
+                Set when you started your sobriety journey
+              </ThemedText>
+
+              <View style={styles.datePickerContainer}>
+                <DateTimePicker
+                  value={resetStartTime}
+                  mode="datetime"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) {
+                      setResetStartTime(selectedDate);
+                    }
+                  }}
+                  maximumDate={new Date()}
+                  textColor={isDark ? "#FFFFFF" : "#000000"}
+                  themeVariant={isDark ? "dark" : "light"}
+                />
+              </View>
+
+              <View style={styles.resetModalButtons}>
+                <Pressable
+                  onPress={handleGoBack}
+                  style={({ pressed }) => [
+                    styles.resetModalButton,
+                    styles.resetModalSecondaryButton,
+                    {
+                      backgroundColor: isDark
+                        ? "rgba(255,255,255,0.08)"
+                        : "rgba(0,0,0,0.05)",
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <ThemedText style={styles.resetModalButtonText}>
+                    Cancel
+                  </ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={handleResetTimer}
+                  disabled={isResettingTimer}
+                  style={({ pressed }) => [
+                    styles.resetModalButton,
+                    styles.resetModalPrimaryButton,
+                    {
+                      backgroundColor: "#4CAF50",
+                      opacity: pressed ? 0.8 : 1,
+                    },
+                  ]}
+                >
+                  {isResettingTimer ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <ThemedText
+                      style={[styles.resetModalButtonText, { color: "#fff" }]}
+                    >
+                      Start Timer
+                    </ThemedText>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -825,6 +945,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontFamily: FontFamily.medium,
   },
+  dayIconContainer: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  moodIconContainer: {
+    marginBottom: 8,
+  },
   dateNumber: {
     fontSize: 11,
     fontWeight: "600",
@@ -839,7 +968,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  moodTitle: {
+  dateInfoContainer: {
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  dateInfoText: {
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+    textAlign: "center",
+    opacity: 0.7,
+  },
+  consumptionTitle: {
     fontSize: 18,
     fontFamily: FontFamily.bold,
     marginBottom: 16,
@@ -863,7 +1002,7 @@ const styles = StyleSheet.create({
   moodButtonInner: {
     flexDirection: "column",
     alignItems: "center",
-    height: 80,
+    height:80,
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 12,
@@ -953,6 +1092,83 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: "#fff",
     fontSize: 17,
+    fontFamily: FontFamily.bold,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  resetModalContainer: {
+    width: "100%",
+    maxWidth: 400,
+    borderRadius: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+  },
+  resetModalLight: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderColor: "rgba(0,0,0,0.1)",
+  },
+  resetModalDark: {
+    backgroundColor: "rgba(28,28,30,0.95)",
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  resetModalBlur: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  resetModalContent: {
+    padding: 24,
+  },
+  resetModalTitle: {
+    fontSize: 22,
+    fontFamily: FontFamily.bold,
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  resetModalMessage: {
+    fontSize: 15,
+    fontFamily: FontFamily.regular,
+    lineHeight: 20,
+    opacity: 0.7,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  datePickerContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  resetModalButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  resetModalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+  resetModalSecondaryButton: {
+    borderWidth: 1,
+    borderColor: "rgba(128,128,128,0.2)",
+  },
+  resetModalPrimaryButton: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  resetModalButtonText: {
+    fontSize: 16,
     fontFamily: FontFamily.bold,
   },
 });

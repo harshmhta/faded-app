@@ -8,10 +8,10 @@ import { FontFamily } from "@/constants/Fonts";
 import { useTheme, type ThemeOption } from "@/contexts/ThemeContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import {
-  ArrowLeft01Icon,
-  ComputerIcon,
-  Moon02Icon,
-  Sun03Icon,
+    ArrowLeft01Icon,
+    ComputerIcon,
+    Moon02Icon,
+    Sun03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 

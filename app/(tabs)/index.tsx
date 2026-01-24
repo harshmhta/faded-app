@@ -1,9 +1,9 @@
-import * as Haptics from "expo-haptics";
-import React, { useCallback, useRef, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View, Pressable } from "react-native";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import DailyConsumptionLogger, { ConsumptionStatus } from "@/components/DailyConsumptionLogger";
 import DashboardHeader from "@/components/DashboardHeader";
@@ -11,13 +11,12 @@ import MotivationalQuoteCardCompact from "@/components/MotivationalQuoteCardComp
 import QuickActions from "@/components/QuickActions";
 import SavingsCalculatorCardCompact from "@/components/SavingsCalculatorCardCompact";
 import SobrietyTimerCard, { SobrietyTimerCardRef } from "@/components/SobrietyTimerCard";
-import ExploreCalendar from "@/components/ExploreCalendar";
-import { useAuth } from "@/contexts/AuthContext";
 import { ThemedText } from "@/components/ThemedText";
 import { FontFamily } from "@/constants/Fonts";
+import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { Alert02Icon, ArrowRight01Icon, Tick01Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 
 type TileProps = {
   title: string;
@@ -37,7 +36,7 @@ function Tile({ title, subtitle, onPress, style, hideChevron }: TileProps) {
       style={[
         {
           width: "48%",
-          minHeight: 180,
+          minHeight: 140,
           borderRadius: 28,
           padding: 20,
           marginBottom: 16,
@@ -151,26 +150,22 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const { user } = useAuth();
+  const params = useLocalSearchParams();
 
   // Mock data - in a real app, this would come from user preferences/storage
   const [sobrietyStartDate] = useState(
     new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
   ); // 5 days ago
   const [dailySpending, setDailySpending] = useState(15);
-  const [refreshing, setRefreshing] = useState(false);
   const [consumptionStatus, setConsumptionStatus] = useState<ConsumptionStatus | null>(null);
   const [timerKey, setTimerKey] = useState(0); // Key to force re-render of timer
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Simulate data refresh and reload timer
-    setTimeout(() => {
-      setRefreshing(false);
+  // Refresh timer when explicitly requested via params
+  useEffect(() => {
+    if (params.refreshTimer === 'true') {
       setTimerKey((prev) => prev + 1);
-    }, 1500);
-  }, []);
+    }
+  }, [params.refreshTimer]);
 
   const handleConsumedPress = () => {
     // Open the reset modal when user clicks "I Consumed"
@@ -182,14 +177,6 @@ export default function HomeScreen() {
       ref={scrollViewRef}
       style={styles.container}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={isDark ? "#4CAF50" : "#2E7D32"}
-          colors={["#4CAF50"]}
-        />
-      }
     >
       {/* Dashboard Header */}
       <DashboardHeader parentScrollRef={scrollViewRef} consumptionStatus={consumptionStatus} />
@@ -209,8 +196,116 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Recovery Journey Section */}
+        {/* Daily Actions */}
+        <View style={[styles.section, styles.dailyActionsSection]}>
+          <ThemedText style={styles.sectionTitle}>Daily Actions</ThemedText>
+          <View style={styles.actionButtonsContainer}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/track-consumption");
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <View
+                style={[
+                  styles.actionButtonInner,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(76, 175, 80, 0.15)"
+                      : "rgba(76, 175, 80, 0.08)",
+                    borderColor: isDark
+                      ? "rgba(76, 175, 80, 0.3)"
+                      : "rgba(76, 175, 80, 0.2)",
+                  },
+                ]}
+              >
+                <BlurView
+                  tint={isDark ? "dark" : "light"}
+                  intensity={20}
+                  style={styles.actionButtonBlur}
+                />
+                {/* Background Icon */}
+                <View style={styles.actionBackgroundIconContainer}>
+                  <HugeiconsIcon
+                    icon={Tick01Icon}
+                    size={60}
+                    color={isDark ? "rgba(76, 175, 80, 0.08)" : "rgba(76, 175, 80, 0.06)"}
+                    strokeWidth={1.5}
+                  />
+                </View>
+                <View style={styles.actionTextContainer}>
+                  <ThemedText style={styles.actionButtonTitle} numberOfLines={2}>
+                    Track{"\n"}Consumption
+                  </ThemedText>
+                  <ThemedText style={styles.actionButtonSubtitle} numberOfLines={2}>
+                    Did you smoke?
+                  </ThemedText>
+                </View>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                router.push("/check-in");
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
+              <View
+                style={[
+                  styles.actionButtonInner,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(33, 150, 243, 0.15)"
+                      : "rgba(33, 150, 243, 0.08)",
+                    borderColor: isDark
+                      ? "rgba(33, 150, 243, 0.3)"
+                      : "rgba(33, 150, 243, 0.2)",
+                  },
+                ]}
+              >
+                <BlurView
+                  tint={isDark ? "dark" : "light"}
+                  intensity={20}
+                  style={styles.actionButtonBlur}
+                />
+                {/* Background Icon */}
+                <View style={styles.actionBackgroundIconContainer}>
+                  <HugeiconsIcon
+                    icon={PencilEdit02Icon}
+                    size={60}
+                    color={isDark ? "rgba(33, 150, 243, 0.08)" : "rgba(33, 150, 243, 0.06)"}
+                    strokeWidth={1.5}
+                  />
+                </View>
+                <View style={styles.actionTextContainer}>
+                  <ThemedText style={styles.actionButtonTitle} numberOfLines={2}>
+                    Log{"\n"}Mood
+                  </ThemedText>
+                  <ThemedText style={styles.actionButtonSubtitle} numberOfLines={2}>
+                    Your feelings?
+                  </ThemedText>
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Insights Section */}
         <View style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>Today's Insights</ThemedText>
+          <MotivationalQuoteCardCompact />
+        </View>
+
+        {/* Recovery Journey Section - COMMENTED OUT */}
+        {/* <View style={styles.section}>
           <View style={[
             styles.recoveryJourneyTile,
             isDark ? styles.tileDark : styles.tileLight,
@@ -248,7 +343,6 @@ export default function HomeScreen() {
               style={styles.tileBottomFade}
             />
 
-            {/* Streak Content */}
             <View style={styles.streakHeader}>
               <ThemedText
                 style={[
@@ -305,78 +399,7 @@ export default function HomeScreen() {
 
             <ExploreCalendar parentScrollRef={scrollViewRef} />
           </View>
-        </View>
-
-        {/* Quick Support Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Quick Support</ThemedText>
-          <View style={styles.tilesContainer}>
-            <Tile
-              title="SOS Help"
-              subtitle="Look at yourself. Stay accountable."
-              onPress={() => {
-                // @ts-expect-error - New route, types will be regenerated on build
-                router.push("/sos-mirror");
-              }}
-              style={[
-                {
-                  backgroundColor: isDark
-                    ? "rgba(244, 67, 54, 0.2)"
-                    : "rgba(244, 67, 54, 0.1)",
-                  borderColor: "#F44336",
-                  borderWidth: 1,
-                },
-              ]}
-            />
-
-            <Tile
-              title="Daily Check-in"
-              subtitle="How are you feeling today?"
-              onPress={() => {
-                router.push("/check-in");
-              }}
-              style={[
-                {
-                  backgroundColor: isDark
-                    ? "rgba(76, 175, 80, 0.2)"
-                    : "rgba(76, 175, 80, 0.1)",
-                  borderColor: "#4CAF50",
-                  borderWidth: 1,
-                },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Daily Check-in Section */}
-        <View style={styles.section}>
-          <DailyConsumptionLogger 
-            onStatusChange={setConsumptionStatus}
-            initialStatus={consumptionStatus}
-            onConsumed={handleConsumedPress}
-          />
-        </View>
-
-        {/* Quick Actions Section */}
-        <View style={styles.section}>
-          <QuickActions />
-        </View>
-
-        {/* Money Saved Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Money Saved</ThemedText>
-          <SavingsCalculatorCardCompact
-            startDate={sobrietyStartDate}
-            dailySpending={dailySpending}
-            onDailySpendingChange={setDailySpending}
-          />
-        </View>
-
-        {/* Insights Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Today's Insights</ThemedText>
-          <MotivationalQuoteCardCompact />
-        </View>
+        </View> */}
       </View>
     </ScrollView>
   );
@@ -388,17 +411,20 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 24,
   },
   firstSection: {
     marginTop: 4,
   },
   section: {
-    marginTop: 20,
+    marginTop: 16,
+  },
+  dailyActionsSection: {
+    marginTop: 8,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: FontFamily.bold,
     marginBottom: 12,
     paddingHorizontal: 4,
@@ -407,6 +433,66 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+  },
+  actionButtonsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  actionButtonInner: {
+    flexDirection: "column",
+    alignItems: "center",
+    height: 100,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    justifyContent: "center",
+  },
+  actionButtonBlur: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: 20,
+  },
+  actionBackgroundIconContainer: {
+    position: "absolute",
+    right: -8,
+    bottom: -8,
+    opacity: 1,
+    transform: [{ rotate: "15deg" }],
+  },
+  actionTextContainer: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  actionButtonTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontFamily: FontFamily.bold,
+    marginBottom: 3,
+    textAlign: "center",
+  },
+  actionButtonSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: FontFamily.regular,
+    opacity: 0.6,
+    textAlign: "center",
+  },
+  textDark: {
+    color: "#FFFFFF",
+  },
+  textLight: {
+    color: "#000000",
   },
   recoveryJourneyTile: {
     width: "100%",

@@ -1,6 +1,7 @@
 import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { sobrietyTimerService } from "@/lib/appwrite";
+import { router } from "expo-router";
 import {
   CrownIcon,
   Edit02Icon,
@@ -383,8 +384,8 @@ const SobrietyTimerCard = React.forwardRef<
             </View>
           </View>
 
-          {/* Milestone Badge */}
-          <View style={styles.milestoneContainer}>
+          {/* Milestone Badge - COMMENTED OUT */}
+          {/* <View style={styles.milestoneContainer}>
             <View
               style={[
                 styles.milestoneBadge,
@@ -413,7 +414,7 @@ const SobrietyTimerCard = React.forwardRef<
                 {milestone.daysToNext} days to {milestone.nextMilestone}
               </ThemedText>
             )}
-          </View>
+          </View> */}
         </View>
       </View>
 

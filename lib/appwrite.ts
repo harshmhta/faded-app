@@ -5,9 +5,10 @@ export const appwriteConfig = {
   endpoint: process.env.EXPO_PUBLIC_APPWRITE_ENDPOINT,
   projectId: process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID,
   platform: process.env.EXPO_PUBLIC_APPWRITE_PLATFORM,
-  databaseId: process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID || "faded-database",
-  moodCheckInsCollectionId: process.env.EXPO_PUBLIC_APPWRITE_MOOD_COLLECTION_ID || "mood-check-ins",
-  sobrietyTimerCollectionId: process.env.EXPO_PUBLIC_APPWRITE_SOBRIETY_TIMER_COLLECTION_ID || "sobriety-timer",
+  databaseId: process.env.EXPO_PUBLIC_APPWRITE_DATABASE_ID,
+  moodCheckInsCollectionId: process.env.EXPO_PUBLIC_APPWRITE_MOOD_COLLECTION_ID,
+  consumptionTrackingCollectionId: process.env.EXPO_PUBLIC_APPWRITE_CONSUMPTION_COLLECTION_ID,
+  sobrietyTimerCollectionId: process.env.EXPO_PUBLIC_APPWRITE_SOBRIETY_TIMER_COLLECTION_ID,
 };
 
 // Initialize Appwrite client
@@ -140,6 +141,128 @@ export const moodCheckInService = {
       return response.documents as MoodCheckIn[];
     } catch (error) {
       console.error("Error fetching mood check-ins by date range:", error);
+      return [];
+    }
+  },
+};
+
+// Consumption tracking types
+export interface ConsumptionTracking {
+  $id?: string;
+  userId: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+  status: string; // "clean" or "smoked"
+  comment?: string;
+  timestamp: string; // ISO timestamp
+  $createdAt?: string;
+  $updatedAt?: string;
+  $permissions?: string[];
+}
+
+// Consumption tracking database functions
+export const consumptionTrackingService = {
+  // Create or update consumption tracking for a specific date
+  async saveConsumptionTracking(userId: string, status: string, comment?: string, date?: string): Promise<ConsumptionTracking> {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toISOString();
+
+    // Check if tracking already exists for the target date
+    const existing = await this.getConsumptionTrackingByDate(userId, targetDate);
+
+    if (existing) {
+      // Update existing tracking
+      const updated = await databases.updateDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.consumptionTrackingCollectionId,
+        existing.$id!,
+        {
+          status,
+          comment: comment || "",
+          timestamp,
+        }
+      );
+      return updated as ConsumptionTracking;
+    } else {
+      // Create new tracking with user-specific permissions
+      const newTracking = await databases.createDocument(
+        appwriteConfig.databaseId,
+        appwriteConfig.consumptionTrackingCollectionId,
+        ID.unique(),
+        {
+          userId,
+          date: targetDate,
+          status,
+          comment: comment || "",
+          timestamp,
+        },
+        [
+          Permission.read(Role.user(userId)),
+          Permission.update(Role.user(userId)),
+          Permission.delete(Role.user(userId)),
+        ]
+      );
+      return newTracking as ConsumptionTracking;
+    }
+  },
+
+  // Get consumption tracking for a specific date
+  async getConsumptionTrackingByDate(userId: string, date: string): Promise<ConsumptionTracking | null> {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.consumptionTrackingCollectionId,
+        [
+          Query.equal('userId', userId),
+          Query.equal('date', date),
+          Query.limit(1),
+        ]
+      );
+      return response.documents.length > 0 ? (response.documents[0] as ConsumptionTracking) : null;
+    } catch (error) {
+      console.error("Error fetching consumption tracking:", error);
+      return null;
+    }
+  },
+
+  // Get all consumption trackings for a user
+  async getAllConsumptionTrackings(userId: string, limit: number = 100): Promise<ConsumptionTracking[]> {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.consumptionTrackingCollectionId,
+        [
+          Query.equal('userId', userId),
+          Query.orderDesc('date'),
+          Query.limit(limit),
+        ]
+      );
+      return response.documents as ConsumptionTracking[];
+    } catch (error) {
+      console.error("Error fetching consumption trackings:", error);
+      return [];
+    }
+  },
+
+  // Get consumption trackings for a date range
+  async getConsumptionTrackingsByDateRange(
+    userId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<ConsumptionTracking[]> {
+    try {
+      const response = await databases.listDocuments(
+        appwriteConfig.databaseId,
+        appwriteConfig.consumptionTrackingCollectionId,
+        [
+          Query.equal('userId', userId),
+          Query.greaterThanEqual('date', startDate),
+          Query.lessThanEqual('date', endDate),
+          Query.orderDesc('date'),
+        ]
+      );
+      return response.documents as ConsumptionTracking[];
+    } catch (error) {
+      console.error("Error fetching consumption trackings by date range:", error);
       return [];
     }
   },

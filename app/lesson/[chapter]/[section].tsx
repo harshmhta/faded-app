@@ -1,36 +1,36 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  View,
-  Pressable,
-  Dimensions,
-  TouchableOpacity,
-} from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  FadeInDown,
-} from 'react-native-reanimated';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { getChapterSection, getCourseChapter } from '@/data/courseContent';
-import { useCourseProgress } from '@/contexts/CourseProgressContext';
-import { HugeiconsIcon } from '@hugeicons/react-native';
-import { 
-  ArrowLeft01Icon,
-  Time04Icon,
-  Award01Icon,
-  CheckmarkCircle02Icon,
-  ArrowRight01Icon,
-  SparklesIcon,
-  BulbIcon,
-} from '@hugeicons/core-free-icons';
 import { Colors } from '@/constants/Colors';
 import { FontFamily } from '@/constants/Fonts';
+import { useCourseProgress } from '@/contexts/CourseProgressContext';
+import { getChapterSection, getCourseChapter } from '@/data/courseContent';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import {
+    ArrowLeft01Icon,
+    ArrowRight01Icon,
+    Award01Icon,
+    BulbIcon,
+    CheckmarkCircle02Icon,
+    Time04Icon
+} from '@hugeicons/core-free-icons';
+import { HugeiconsIcon } from '@hugeicons/react-native';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    Dimensions,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import Animated, {
+    FadeInDown,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -40,6 +40,7 @@ export default function LessonScreen() {
   const chapter = getCourseChapter(chapterNumber);
   const section = getChapterSection(chapterNumber, sectionId as string);
   
+  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const isDark = colorScheme === 'dark';
   const { completeSection, isSectionCompleted } = useCourseProgress();
@@ -300,36 +301,40 @@ export default function LessonScreen() {
     <>
       <Stack.Screen
         options={{
-          title: section.title,
-          headerShown: true,
-          headerTransparent: false,
-          headerTitleStyle: {
-            fontSize: 18,
-            fontFamily: FontFamily.medium,
-          },
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.headerButton}
-            >
-              <HugeiconsIcon
-                icon={ArrowLeft01Icon}
-                size={24}
-                color={Colors[colorScheme].text}
-                strokeWidth={2.0}
-              />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
         }}
       />
       <ThemedView style={styles.container}>
         <ScrollView
           ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 10 },
+          ]}
           onScroll={handleScroll}
           scrollEventThrottle={16}
         >
+          {/* Header with Back Button and Title */}
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <HugeiconsIcon
+                icon={ArrowLeft01Icon}
+                size={24}
+                color={isDark ? '#fff' : '#000'}
+              />
+            </Pressable>
+            
+            <View style={styles.headerContent}>
+              <ThemedText style={styles.lessonTitle}>
+                {section.title}
+              </ThemedText>
+            </View>
+          </View>
+
           {/* Lesson Header */}
           <View style={styles.headerSection}>
             <View style={styles.metaRow}>
@@ -443,11 +448,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  headerButton: {
-    padding: 8,
-    marginLeft: -4,
+  header: {
+    position: 'relative',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 8,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    padding: 8,
+    zIndex: 1,
+  },
+  headerContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  lessonTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   headerSection: {
     paddingTop: 0,

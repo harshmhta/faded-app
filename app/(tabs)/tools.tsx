@@ -12,6 +12,7 @@ import {
   FloppyDiskIcon,
   Message01Icon,
   MoreVerticalIcon,
+  SecurityLockIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -416,8 +417,19 @@ export default function ToolsScreen() {
   };
 
   useEffect(() => {
-    // Show AI popup modal when tools page is accessed
-    setShowAIPopupModal(true);
+    // Check if user has seen the AI popup modal before
+    const checkAIPopupStatus = async () => {
+      try {
+        const hasSeenPopup = await AsyncStorage.getItem("hasSeenAIPopup");
+        if (!hasSeenPopup) {
+          setShowAIPopupModal(true);
+        }
+      } catch (error) {
+        console.error("Error checking AI popup status:", error);
+      }
+    };
+
+    checkAIPopupStatus();
     loadChatSessions();
 
     // Handle app state changes for auto-save
@@ -652,7 +664,8 @@ export default function ToolsScreen() {
                 Start a conversation with Luma
               </ThemedText>
               <ThemedText style={styles.emptyText}>
-                Your AI companion is here to support you. Try asking about:
+                Your AI companion is here to support you.
+                Try asking about:
               </ThemedText>
 
               <View style={styles.conversationStarters}>
@@ -700,6 +713,20 @@ export default function ToolsScreen() {
                     </ThemedText>
                   </Pressable>
                 ))}
+              </View>
+
+              <View style={styles.privacyContainer}>
+                <View style={styles.privacyContent}>
+                  <HugeiconsIcon
+                    icon={SecurityLockIcon}
+                    size={24}
+                    color={isDark ? "#8E8E93" : "#6C6C70"}
+                    style={styles.privacyIcon}
+                  />
+                  <ThemedText style={styles.privacyText}>
+                    Chat saved only on device.{"\n"}Your data is not used to train AI.
+                  </ThemedText>
+                </View>
               </View>
             </View>
           )}
@@ -946,7 +973,14 @@ export default function ToolsScreen() {
 
         <AIPreviewModal
           visible={showAIPopupModal}
-          onClose={() => setShowAIPopupModal(false)}
+          onClose={async () => {
+            setShowAIPopupModal(false);
+            try {
+              await AsyncStorage.setItem("hasSeenAIPopup", "true");
+            } catch (error) {
+              console.error("Error saving AI popup status:", error);
+            }
+          }}
         />
 
         {/* Chat History Modal */}
@@ -1235,6 +1269,25 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     lineHeight: 22,
     marginBottom: 24,
+  },
+  privacyContainer: {
+    marginTop: 20,
+    marginBottom: 0,
+    alignItems: "center",
+  },
+  privacyContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  privacyIcon: {
+    marginTop: 2,
+  },
+  privacyText: {
+    textAlign: "center",
+    opacity: 0.6,
+    lineHeight: 20,
+    fontSize: 13,
   },
   conversationStarters: {
     width: "100%",

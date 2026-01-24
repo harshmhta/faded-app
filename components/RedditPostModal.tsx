@@ -5,21 +5,21 @@ import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import {
-  ArrowUp01Icon,
-  ArrowUpRight03Icon,
-  Comment01Icon,
+    ArrowUp01Icon,
+    ArrowUpRight03Icon,
+    Comment01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Linking,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RedditPost } from "./RedditPostCard";
