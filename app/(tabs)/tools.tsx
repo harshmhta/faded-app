@@ -2,7 +2,11 @@ import { AIPreviewModal } from "@/components/AIPreviewModal";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { FontFamily } from "@/constants/Fonts";
+import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { chatService } from "@/lib/db";
+import { LumaError, sendToLuma } from "@/lib/luma";
+import { LOCAL_KEYS } from "@/lib/supabase";
 import {
   BubbleChatIcon,
   Call02Icon,
@@ -21,9 +25,8 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
-  AppState,
-  AppStateStatus,
   Clipboard,
   FlatList,
   Keyboard,
@@ -66,7 +69,6 @@ interface ChatSession {
   messages: Message[];
   title: string;
   timestamp: Date;
-  isActive?: boolean;
 }
 
 interface PulsatingIndicatorProps {
@@ -142,6 +144,7 @@ export default function ToolsScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  const { user } = useAuth();
   const [showAIPopupModal, setShowAIPopupModal] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
@@ -151,13 +154,14 @@ export default function ToolsScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [showCrisisSupport, setShowCrisisSupport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const keyboardAwareScrollRef = useRef<ScrollView>(null);
   const typingDotsAnimation = useSharedValue(0);
-  const appStateRef = useRef(AppState.currentState);
 
   // Keyboard animation with spring
   const keyboardHeight = useSharedValue(0);
@@ -263,13 +267,13 @@ export default function ToolsScreen() {
 
   const clearAllMessages = () => {
     Alert.alert(
-      "Clear Chat",
-      "This will clear the current conversation without saving. Are you sure?",
+      "Start a new chat",
+      "This closes the current conversation. It stays in your history — you can reopen it any time.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Clear",
-          style: "destructive",
+          text: "New chat",
+          style: "default",
           onPress: () => {
             setMessages([]);
             setCurrentSessionId(null);
@@ -280,116 +284,83 @@ export default function ToolsScreen() {
     );
   };
 
-  const handleAppStateChange = (nextAppState: AppStateStatus) => {
-    if (
-      appStateRef.current.match(/active/) &&
-      nextAppState.match(/inactive|background/)
-    ) {
-      // App is going to background, save current session
-      if (currentSessionId && messages.length > 0) {
-        saveCurrentSession();
-      }
-    }
-    appStateRef.current = nextAppState;
-  };
-
-  const loadChatSessions = async () => {
+  /**
+   * Conversations live in Supabase now, so history follows the account instead
+   * of the device — and is no longer readable by whoever signs in next.
+   * The Edge Function persists each turn as it happens, so there is nothing to
+   * flush on background and no 50-session silent truncation.
+   */
+  const refreshSessions = async () => {
+    if (!user) return;
     try {
-      const sessionsJson = await AsyncStorage.getItem("chatSessions");
-      if (sessionsJson) {
-        const sessions = JSON.parse(sessionsJson);
-        setChatSessions(
-          sessions.map((s: any) => ({
-            ...s,
-            timestamp: new Date(s.timestamp),
-            messages: s.messages.map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })),
-          })),
-        );
-      }
-    } catch (error) {
-      console.error("Error loading chat sessions:", error);
-    }
-  };
-
-  const saveCurrentSession = async () => {
-    if (!messages.length) return;
-
-    try {
-      const sessionId = currentSessionId || Date.now().toString();
-      const title =
-        messages[0]?.text.substring(0, 50) +
-        (messages[0]?.text.length > 50 ? "..." : "");
-
-      const newSession: ChatSession = {
-        id: sessionId,
-        messages,
-        title,
-        timestamp: new Date(),
-        isActive: true,
-      };
-
-      const updatedSessions = chatSessions.filter((s) => s.id !== sessionId);
-      updatedSessions.unshift(newSession);
-
-      // Keep only last 50 sessions
-      const sessionsToSave = updatedSessions.slice(0, 50);
-
-      await AsyncStorage.setItem(
-        "chatSessions",
-        JSON.stringify(sessionsToSave),
+      const rows = await chatService.listSessions(user.id);
+      setChatSessions(
+        rows.map((row) => ({
+          id: row.id,
+          title: row.title ?? "Untitled conversation",
+          timestamp: new Date(row.updated_at),
+          messages: [],
+        })),
       );
-      setChatSessions(sessionsToSave);
-      setCurrentSessionId(sessionId);
+      setSessionsError(null);
     } catch (error) {
-      console.error("Error saving chat session:", error);
+      setSessionsError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't load your conversations.",
+      );
     }
   };
 
   const endAndSaveChat = () => {
-    Alert.alert(
-      "Save & Exit Chat",
-      "This will save the current conversation and start a new one. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Save & Exit",
-          style: "default",
-          onPress: async () => {
-            await saveCurrentSession();
-            setMessages([]);
-            setCurrentSessionId(null);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
-    );
+    setMessages([]);
+    setCurrentSessionId(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
-  const loadChatSession = (session: ChatSession) => {
-    setMessages(session.messages);
-    setCurrentSessionId(session.id);
+  /** Messages are fetched on demand — the history list only holds titles. */
+  const loadChatSession = async (session: ChatSession) => {
     setShowChatHistory(false);
-    scrollToBottom();
+    setIsLoadingHistory(true);
+    try {
+      const rows = await chatService.getMessages(session.id);
+      setMessages(
+        rows.map((row) => ({
+          id: row.id,
+          text: row.content,
+          isUser: row.role === "user",
+          timestamp: new Date(row.created_at),
+        })),
+      );
+      setCurrentSessionId(session.id);
+      scrollToBottom();
+    } catch (error) {
+      Alert.alert(
+        "Couldn't open that conversation",
+        error instanceof Error ? error.message : "Try again in a moment.",
+      );
+    } finally {
+      setIsLoadingHistory(false);
+    }
   };
 
   const deleteChatSession = async (sessionId: string) => {
-    try {
-      const updatedSessions = chatSessions.filter((s) => s.id !== sessionId);
-      await AsyncStorage.setItem(
-        "chatSessions",
-        JSON.stringify(updatedSessions),
-      );
-      setChatSessions(updatedSessions);
+    const previous = chatSessions;
+    setChatSessions((current) => current.filter((s) => s.id !== sessionId));
 
-      if (currentSessionId === sessionId) {
-        setMessages([]);
-        setCurrentSessionId(null);
-      }
+    if (currentSessionId === sessionId) {
+      setMessages([]);
+      setCurrentSessionId(null);
+    }
+
+    try {
+      await chatService.deleteSession(sessionId);
     } catch (error) {
-      console.error("Error deleting chat session:", error);
+      setChatSessions(previous);
+      Alert.alert(
+        "Couldn't delete that conversation",
+        error instanceof Error ? error.message : "Try again in a moment.",
+      );
     }
   };
 
@@ -417,45 +388,25 @@ export default function ToolsScreen() {
   };
 
   useEffect(() => {
-    // Check if user has seen the AI popup modal before
+    if (!user) return;
+
+    // The intro modal is per-account, not per-device — a second person signing
+    // in on the same phone should see it too.
     const checkAIPopupStatus = async () => {
       try {
-        const hasSeenPopup = await AsyncStorage.getItem("hasSeenAIPopup");
-        if (!hasSeenPopup) {
+        const key = LOCAL_KEYS.aiPopupSeen(user.id);
+        if (!(await AsyncStorage.getItem(key))) {
           setShowAIPopupModal(true);
         }
-      } catch (error) {
-        console.error("Error checking AI popup status:", error);
+      } catch {
+        // Worst case the modal shows again; not worth surfacing.
       }
     };
 
     checkAIPopupStatus();
-    loadChatSessions();
-
-    // Handle app state changes for auto-save
-    const subscription = AppState.addEventListener(
-      "change",
-      handleAppStateChange,
-    );
-
-    return () => {
-      subscription.remove();
-      // Save current session when component unmounts
-      if (currentSessionId && messages.length > 0) {
-        saveCurrentSession();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    // Auto-save when messages change
-    if (currentSessionId && messages.length > 0) {
-      const timer = setTimeout(() => {
-        saveCurrentSession();
-      }, 1000); // Debounce for 1 second
-      return () => clearTimeout(timer);
-    }
-  }, [messages]);
+    refreshSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -487,49 +438,47 @@ export default function ToolsScreen() {
     );
 
     try {
-      const response = await fetch(
-        "https://ywvxpmiddklmsm5td5lgel7u.agents.do-ai.run/api/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.EXPO_PUBLIC_DO_API_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [
-              {
-                role: "user",
-                content: messageText,
-              },
-            ],
-          }),
-        },
-      );
+      // The Edge Function assembles the conversation history and user context
+      // server-side. The old call sent only this one message, so every reply
+      // was generated with no memory of what came before.
+      const result = await sendToLuma(messageText, currentSessionId);
 
-      const data = await response.json();
+      if (!currentSessionId) {
+        setCurrentSessionId(result.sessionId);
+      }
 
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text:
-          data.choices?.[0]?.message?.content ||
-          "Sorry, I couldn't process your request.",
+        id: `${result.sessionId}-${Date.now()}`,
+        text: result.reply,
         isUser: false,
         timestamp: new Date(),
-        isError: !data.choices?.[0]?.message?.content,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+
+      // Surface real crisis resources as UI regardless of how the model
+      // phrased its reply.
+      if (result.crisis) {
+        setShowCrisisSupport(true);
+      }
+
       scrollToBottom();
+      await refreshSessions();
     } catch (error) {
-      console.error("Error sending message:", error);
+      const message =
+        error instanceof LumaError
+          ? error.message
+          : "Something went wrong. Try again.";
+
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Sorry, I'm having trouble connecting right now. Please try again.",
+        id: `error-${Date.now()}`,
+        text: message,
         isUser: false,
         timestamp: new Date(),
         isError: true,
       };
       setMessages((prev) => [...prev, errorMessage]);
+      scrollToBottom();
     } finally {
       setIsLoading(false);
       setIsTyping(false);
@@ -975,10 +924,11 @@ export default function ToolsScreen() {
           visible={showAIPopupModal}
           onClose={async () => {
             setShowAIPopupModal(false);
+            if (!user) return;
             try {
-              await AsyncStorage.setItem("hasSeenAIPopup", "true");
-            } catch (error) {
-              console.error("Error saving AI popup status:", error);
+              await AsyncStorage.setItem(LOCAL_KEYS.aiPopupSeen(user.id), "true");
+            } catch {
+              // Non-critical: the modal would simply appear once more.
             }
           }}
         />
@@ -1119,7 +1069,7 @@ export default function ToolsScreen() {
                 <ThemedText style={styles.disclaimerText}>
                   Luma is an AI companion designed to support you on your
                   journey. While Luma can provide helpful guidance and coping
-                  strategies, it's important to understand:
+                  strategies, it&apos;s important to understand:
                 </ThemedText>
 
                 <View style={styles.disclaimerPoints}>
@@ -1171,7 +1121,7 @@ export default function ToolsScreen() {
                   </View>
                 </View>
                 <ThemedText style={styles.crisisCardContent}>
-                  If you're having thoughts of self-harm, help is available
+                  If you&apos;re having thoughts of self-harm, help is available
                   right now.
                 </ThemedText>
                 <View style={styles.crisisButtons}>

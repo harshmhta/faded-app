@@ -110,7 +110,7 @@ export function AIPreviewModal({ visible, onClose }: AIPreviewModalProps) {
             </ThemedText>
 
             <ThemedText style={styles.heroDescription}>
-              Your personal guide for navigating cannabis use. Whether you're
+              Your personal guide for navigating cannabis use. Whether you&apos;re
               looking to cut back, take breaks, or quit entirely, Luma is here
               to support you every step of the way.
             </ThemedText>

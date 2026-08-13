@@ -5,6 +5,8 @@ const expoConfig = require("eslint-config-expo/flat");
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ["dist/*"],
+    // Edge Functions are Deno, not React Native — different globals and
+    // module resolution, so they are linted by `deno lint` instead.
+    ignores: ["dist/*", "supabase/functions/*"],
   },
 ]);

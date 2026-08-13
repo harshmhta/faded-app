@@ -1,318 +1,338 @@
-import { account } from "@/lib/appwrite";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { Session, User as SupabaseUser } from "@supabase/supabase-js";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { makeRedirectUri } from "expo-auth-session";
-import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import React, {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
 } from "react";
-import { Platform } from "react-native";
+import { clearLocalUserData, supabase } from "@/lib/supabase";
+import { profileService } from "@/lib/db";
 
-export interface User {
-  $id: string;
-  email: string;
-  name: string;
+WebBrowser.maybeCompleteAuthSession();
+
+export interface AuthUser {
+  id: string;
+  email: string | null;
+  name: string | null;
 }
 
+export type AuthResult = { ok: true } | { ok: false; message: string };
+
 export interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
+  session: Session | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signInWithApple: () => Promise<boolean>;
-  signInWithGoogle: () => Promise<boolean>;
-  signInWithEmail: (email: string, password: string) => Promise<boolean>;
+  signInWithApple: () => Promise<AuthResult>;
+  signInWithGoogle: () => Promise<AuthResult>;
+  signInWithEmail: (email: string, password: string) => Promise<AuthResult>;
   signUpWithEmail: (
     name: string,
     email: string,
     password: string,
-  ) => Promise<boolean>;
+  ) => Promise<AuthResult>;
   signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+  deleteAccount: () => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
+function toAuthUser(user: SupabaseUser | null | undefined): AuthUser | null {
+  if (!user) return null;
+  const metadata = user.user_metadata ?? {};
+  return {
+    id: user.id,
+    email: user.email ?? null,
+    name:
+      (metadata.full_name as string | undefined) ??
+      (metadata.name as string | undefined) ??
+      user.email?.split("@")[0] ??
+      null,
+  };
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+/** Turn a Supabase auth error into something worth showing a person. */
+function describeAuthError(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Something went wrong.";
+
+  if (/invalid login credentials/i.test(raw)) {
+    return "That email and password don't match. Check them and try again.";
+  }
+  if (/user already registered/i.test(raw)) {
+    return "An account already exists for that email. Try signing in instead.";
+  }
+  if (/password should be at least/i.test(raw)) {
+    return "Passwords need to be at least 6 characters.";
+  }
+  if (/email not confirmed/i.test(raw)) {
+    return "Confirm your email address first — check your inbox for the link.";
+  }
+  if (/network|fetch/i.test(raw)) {
+    return "Can't reach the server. Check your connection and try again.";
+  }
+  return raw;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    loadStoredAuth();
+    let active = true;
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!active) return;
+        setSession(data.session);
+        lastUserIdRef.current = data.session?.user.id ?? null;
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        setSession(nextSession);
+        lastUserIdRef.current = nextSession?.user.id ?? null;
+        setIsLoading(false);
+      },
+    );
+
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
-  const loadStoredAuth = async () => {
+  const signInWithApple = useCallback(async (): Promise<AuthResult> => {
     try {
-      // Try to get current user session from Appwrite backend only
-      const currentUser = await account.get();
-      const user: User = {
-        $id: currentUser.$id,
-        email: currentUser.email,
-        name: currentUser.name,
-      };
-      setUser(user);
-      console.log("Active Appwrite session found for user:", user.email);
-    } catch (error) {
-      // No active Appwrite session, user needs to sign in
-      console.log("No active Appwrite session found");
-      setUser(null);
-      // Clear any old local storage data for security
-      await AsyncStorage.removeItem("user");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const signInWithApple = async (): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-
-      // Check if Apple Authentication is available
-      const isAvailable = await AppleAuthentication.isAvailableAsync();
-      if (!isAvailable) {
-        console.error("Apple Authentication is not available on this device");
-        return false;
+      if (!(await AppleAuthentication.isAvailableAsync())) {
+        return {
+          ok: false,
+          message: "Sign in with Apple isn't available on this device.",
+        };
       }
 
-      // Perform native Apple authentication
-      const appleCredential = await AppleAuthentication.signInAsync({
+      const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
 
-      if (!appleCredential.identityToken || !appleCredential.user) {
-        console.error(
-          "Apple Sign-In failed: Missing identity token or user identifier",
-        );
-        return false;
+      if (!credential.identityToken) {
+        return { ok: false, message: "Apple didn't return an identity token." };
       }
 
-      // React Native doesn't support OAuth2 browser redirects, use secure manual account creation
-      // Handle both shared and anonymous emails
-      const email =
-        appleCredential.email ||
-        `${appleCredential.user}@privaterelay.appleid.com`;
-
-      // Ensure name is valid (1-128 chars)
-      let name = "Apple User"; // Default fallback
-      if (appleCredential.fullName) {
-        const firstName = appleCredential.fullName.givenName || "";
-        const lastName = appleCredential.fullName.familyName || "";
-        const fullName = `${firstName} ${lastName}`.trim();
-
-        if (fullName.length > 0) {
-          // Truncate if too long (max 128 chars)
-          name = fullName.length > 128 ? fullName.substring(0, 128) : fullName;
-        }
-      }
-
-      // Use Apple's stable user identifier as the primary key
-      // This ensures consistency for both shared and anonymous emails
-      const appleUserIdHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        `apple_stable_${appleCredential.user}`,
-        { encoding: Crypto.CryptoEncoding.HEX },
-      );
-      const appwriteUserId = `apple_${appleUserIdHash.substring(0, 28)}`;
-
-      // Create a secure, consistent password using Apple's stable user ID
-      const passwordHash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        `apple_secure_password_${appleCredential.user}`,
-        { encoding: Crypto.CryptoEncoding.HEX },
-      );
-      const password = passwordHash.substring(0, 32);
-
-      let currentUser;
-      try {
-        // Try to create a new account with Apple's stable user identifier
-        currentUser = await account.create(
-          appwriteUserId as any,
-          email,
-          password,
-          name,
-        );
-
-        console.log("Created new Apple user account:", {
-          id: appwriteUserId,
-          email,
-          name,
-        });
-
-        // Create session for the new user
-        await account.createEmailPasswordSession(email, password);
-        currentUser = await account.get();
-      } catch (createError: any) {
-        if (
-          createError.code === 409 ||
-          createError.type === "user_already_exists"
-        ) {
-          console.log("Apple user already exists, attempting sign-in...");
-          // User already exists, sign them in with consistent password
-          try {
-            await account.createEmailPasswordSession(email, password);
-            currentUser = await account.get();
-            console.log("Successfully signed in existing Apple user");
-          } catch (loginError: any) {
-            console.error(
-              "Failed to login existing Apple user with consistent password:",
-              loginError,
-            );
-            // This should not happen with our consistent password approach
-            throw new Error(
-              `Authentication failed for Apple user: ${String(loginError?.message || loginError)}`,
-            );
-          }
-        } else {
-          console.error(
-            "Unexpected error creating Apple user account:",
-            createError,
-          );
-          throw createError;
-        }
-      }
-
-      const user: User = {
-        $id: currentUser.$id,
-        email: currentUser.email,
-        name: currentUser.name,
-      };
-
-      console.log("Apple Sign-In successful:", {
-        id: user.$id,
-        email: user.email,
-        isPrivateEmail: user.email.includes("@privaterelay.appleid.com"),
+      // Supabase verifies this token against Apple's public keys server-side.
+      // No password is synthesised and nothing about the account is derivable
+      // from a value the client controls.
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: "apple",
+        token: credential.identityToken,
       });
 
-      setUser(user);
-      return true;
-    } catch (error) {
-      console.error("Apple Sign In error:", error);
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (error) return { ok: false, message: describeAuthError(error) };
 
-  const signOut = async () => {
+      // Apple only ever sends the display name on the very first authorization,
+      // so capture it now or lose it permanently.
+      const givenName = credential.fullName?.givenName ?? "";
+      const familyName = credential.fullName?.familyName ?? "";
+      const fullName = `${givenName} ${familyName}`.trim();
+
+      if (fullName && data.user) {
+        await supabase.auth.updateUser({ data: { full_name: fullName } });
+        await profileService
+          .update(data.user.id, { display_name: fullName })
+          .catch(() => {
+            // A missing display name is not worth failing a sign-in over.
+          });
+      }
+
+      return { ok: true };
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code: string }).code === "ERR_REQUEST_CANCELED"
+      ) {
+        return { ok: false, message: "" };
+      }
+      return { ok: false, message: describeAuthError(error) };
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async (): Promise<AuthResult> => {
     try {
-      setIsLoading(true);
-      // Delete the current session from Appwrite backend
-      await account.deleteSession("current");
-      console.log("Successfully signed out from Appwrite");
-      setUser(null);
-      // Clear any local storage for security
-      await AsyncStorage.removeItem("user");
+      const redirectTo = makeRedirectUri({ scheme: "faded", path: "auth" });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) return { ok: false, message: describeAuthError(error) };
+      if (!data.url) {
+        return { ok: false, message: "Couldn't start Google sign-in." };
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== "success") {
+        return { ok: false, message: "" };
+      }
+
+      return await createSessionFromUrl(result.url);
     } catch (error) {
-      console.error("Sign out error:", error);
-      // Even if the API call fails, clear local user state for security
-      await AsyncStorage.removeItem("user");
-      setUser(null);
-    } finally {
-      setIsLoading(false);
+      return { ok: false, message: describeAuthError(error) };
     }
-  };
+  }, []);
 
-  const value: AuthContextType = {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
-    signInWithApple,
-    signInWithGoogle: async () => {
-      try {
-        setIsLoading(true);
+  const signInWithEmail = useCallback(
+    async (email: string, password: string): Promise<AuthResult> => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return error
+        ? { ok: false, message: describeAuthError(error) }
+        : { ok: true };
+    },
+    [],
+  );
 
-        // Web: Use Appwrite OAuth session which handles cookies
-        if (Platform.OS === "web") {
-          const origin = window.location.origin;
-          const successUrl = `${origin}/oauth-success`;
-          const failureUrl = `${origin}/(auth)/sign-in?error=google`;
-          await account.createOAuth2Session(
-            "google" as any,
-            successUrl,
-            failureUrl,
-            [],
-          );
-          return true;
-        }
+  const signUpWithEmail = useCallback(
+    async (
+      name: string,
+      email: string,
+      password: string,
+    ): Promise<AuthResult> => {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: name } },
+      });
 
-        // Native: Appwrite recommended flow with deep link using preferLocalhost
-        const deepLink = new URL(makeRedirectUri({ preferLocalhost: true }));
-        const scheme = `${deepLink.protocol}//`;
-        // @ts-ignore SDK returns URL
-        const loginUrl = await (account as any).createOAuth2Token({
-          provider: "google",
-          success: `${deepLink}`,
-          failure: `${deepLink}`,
-        });
-        const result = await WebBrowser.openAuthSessionAsync(
-          `${loginUrl}`,
-          scheme,
-        );
-        if (result.type !== "success" || !result.url) return false;
-        const returned = new URL(result.url);
-        const secret = returned.searchParams.get("secret");
-        const userId = returned.searchParams.get("userId");
-        if (!secret || !userId) return false;
-        await account.createSession(userId, secret);
-        await loadStoredAuth();
-        return true;
-      } catch (error) {
-        console.error("Google Sign In error:", error);
-        return false;
-      } finally {
-        setIsLoading(false);
+      if (error) return { ok: false, message: describeAuthError(error) };
+
+      // With email confirmation enabled there is no session yet — say so
+      // rather than silently landing the user back on the sign-in screen.
+      if (!data.session) {
+        return {
+          ok: false,
+          message: "Check your inbox to confirm your email, then sign in.",
+        };
       }
+
+      return { ok: true };
     },
-    signInWithEmail: async (email: string, password: string) => {
-      try {
-        setIsLoading(true);
-        await account.createEmailPasswordSession(email, password);
-        await loadStoredAuth();
-        return true;
-      } catch (error) {
-        console.error("Email Sign In error:", error);
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    signUpWithEmail: async (name: string, email: string, password: string) => {
-      try {
-        setIsLoading(true);
-        // Create user then sign in
-        // Generate a stable userId from email
-        const user = await account.create(
-          "unique()" as any,
-          email,
-          password,
-          name,
-        );
-        await account.createEmailPasswordSession(email, password);
-        await loadStoredAuth();
-        return true;
-      } catch (error) {
-        console.error("Email Sign Up error:", error);
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    signOut,
-    refreshUser: loadStoredAuth,
-  };
+    [],
+  );
+
+  const signOut = useCallback(async () => {
+    const userId = lastUserIdRef.current;
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      // Always clear local caches, even if the network call failed — otherwise
+      // the next account to sign in on this device inherits the previous one's
+      // conversations and course progress.
+      if (userId) await clearLocalUserData(userId);
+      setSession(null);
+    }
+  }, []);
+
+  const deleteAccount = useCallback(async (): Promise<AuthResult> => {
+    const userId = lastUserIdRef.current;
+    try {
+      await profileService.deleteAccount();
+      if (userId) await clearLocalUserData(userId);
+      await supabase.auth.signOut();
+      setSession(null);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, message: describeAuthError(error) };
+    }
+  }, []);
+
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user: toAuthUser(session?.user),
+      session,
+      isLoading,
+      isAuthenticated: !!session?.user,
+      signInWithApple,
+      signInWithGoogle,
+      signInWithEmail,
+      signUpWithEmail,
+      signOut,
+      deleteAccount,
+    }),
+    [
+      session,
+      isLoading,
+      signInWithApple,
+      signInWithGoogle,
+      signInWithEmail,
+      signUpWithEmail,
+      signOut,
+      deleteAccount,
+    ],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/**
+ * Complete an OAuth redirect. Handles both the PKCE flow (a `code` query param,
+ * which is what this client is configured for) and the implicit flow (tokens in
+ * the URL fragment) so a provider misconfiguration degrades gracefully.
+ */
+export async function createSessionFromUrl(url: string): Promise<AuthResult> {
+  const parsed = new URL(url);
+  const query = parsed.searchParams;
+  const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+
+  const errorDescription =
+    query.get("error_description") ?? fragment.get("error_description");
+  if (errorDescription) return { ok: false, message: errorDescription };
+
+  const code = query.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    return error ? { ok: false, message: error.message } : { ok: true };
+  }
+
+  const accessToken = fragment.get("access_token") ?? query.get("access_token");
+  const refreshToken =
+    fragment.get("refresh_token") ?? query.get("refresh_token");
+
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    return error ? { ok: false, message: error.message } : { ok: true };
+  }
+
+  return { ok: false, message: "Sign-in didn't return a session." };
 }
 
 export function useAuth() {

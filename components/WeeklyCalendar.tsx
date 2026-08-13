@@ -19,6 +19,7 @@ import { ConsumptionStatus } from "./DailyConsumptionLogger";
 import { ThemedText } from "./ThemedText";
 import { useConsumption } from "@/contexts/ConsumptionContext";
 import { router, useFocusEffect } from "expo-router";
+import { toEntryDate } from "@/lib/dates";
 
 const { width: screenWidth } = Dimensions.get("window");
 const WEEK_WIDTH = screenWidth - 40; // Account for padding
@@ -78,8 +79,8 @@ export default function WeeklyCalendar({
     const startDate = new Date(weeks[0][0]);
     const endDate = new Date(weeks[weeks.length - 1][6]);
     loadConsumptionHistory(
-      startDate.toISOString().split("T")[0],
-      endDate.toISOString().split("T")[0]
+      toEntryDate(startDate),
+      toEntryDate(endDate)
     );
   }, [loadConsumptionHistory]);
 
@@ -90,7 +91,7 @@ export default function WeeklyCalendar({
 
   // Check if date has consumption tracking
   const getConsumptionForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toEntryDate(date);
     return consumptionHistory.get(dateStr);
   };
 
@@ -156,7 +157,7 @@ export default function WeeklyCalendar({
               
               // If date has no tracking, navigate to track-consumption with this date
               if (!hasTracking) {
-                const dateStr = date.toISOString().split("T")[0];
+                const dateStr = toEntryDate(date);
                 router.push(`/track-consumption?date=${dateStr}`);
               }
             }}

@@ -203,8 +203,11 @@ export default function ChapterDetailScreen() {
               styles.quizCard,
               isDark ? styles.cardDark : styles.cardLight,
               !allSectionsCompleted && styles.quizCardLocked,
-              allSectionsCompleted && !progress?.quizScores[chapter.id] && styles.quizCardUnlocked,
-              progress?.quizScores[chapter.id] && styles.quizCardCompleted,
+              allSectionsCompleted &&
+                progress?.quizScores[chapter.id] === undefined &&
+                styles.quizCardUnlocked,
+              progress?.quizScores[chapter.id] !== undefined &&
+                styles.quizCardCompleted,
             ]}
           >
             <BlurView

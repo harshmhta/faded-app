@@ -347,7 +347,7 @@ export default function SOSMirrorScreen() {
             </View>
           </View>
           <ThemedText style={styles.crisisCardContent}>
-            If you're having thoughts of self-harm, help is available right now.
+            If you&apos;re having thoughts of self-harm, help is available right now.
           </ThemedText>
           <View style={styles.crisisButtons}>
             <Pressable

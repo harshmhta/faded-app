@@ -148,7 +148,7 @@ export default function MotivationalQuoteCardCompact() {
 
         <View style={styles.quoteSection}>
           <ThemedText style={[styles.quoteText, { color: textColor }]}>
-            "{currentQuote.quote}"
+            &ldquo;{currentQuote.quote}&rdquo;
           </ThemedText>
           <ThemedText style={[styles.authorText, { color: textColor }]}>
             — {currentQuote.author}

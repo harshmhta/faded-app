@@ -33,7 +33,6 @@ export default function DashboardHeader({
 
   const handleSOSPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // @ts-expect-error - New route, types will be regenerated on build
     router.push("/sos-mirror");
   };
 

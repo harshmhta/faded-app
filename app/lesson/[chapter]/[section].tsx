@@ -97,7 +97,7 @@ export default function LessonScreen() {
   };
 
   const renderTextWithBold = (text: string, key: string) => {
-    const parts: (string | JSX.Element)[] = [];
+    const parts: (string | React.ReactElement)[] = [];
     const boldRegex = /\*\*(.*?)\*\*/g;
     let lastIndex = 0;
     let match;

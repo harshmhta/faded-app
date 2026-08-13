@@ -5,9 +5,11 @@ import { useColorScheme } from "@/hooks/useColorScheme";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -23,19 +25,37 @@ export default function EmailAuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const trimmedEmail = email.trim();
+  const canSubmit =
+    trimmedEmail.includes("@") &&
+    password.length >= 6 &&
+    (mode === "signin" || name.trim().length > 0) &&
+    !isSubmitting;
 
   const onSubmit = async () => {
-    const ok =
-      mode === "signin"
-        ? await signInWithEmail(email.trim(), password)
-        : await signUpWithEmail(name.trim(), email.trim(), password);
-    if (ok) {
-      router.replace("/(tabs)");
-    } else {
-      Alert.alert(
-        "Error",
-        "Authentication failed. Please check details and try again.",
-      );
+    if (!canSubmit) return;
+
+    setIsSubmitting(true);
+    try {
+      const result =
+        mode === "signin"
+          ? await signInWithEmail(trimmedEmail, password)
+          : await signUpWithEmail(name.trim(), trimmedEmail, password);
+
+      if (result.ok) {
+        router.replace("/(tabs)");
+      } else if (result.message) {
+        // The context already translates Supabase errors into something a
+        // person can act on, so show it rather than a generic failure.
+        Alert.alert(
+          mode === "signin" ? "Couldn't sign in" : "Couldn't create account",
+          result.message,
+        );
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -64,6 +84,11 @@ export default function EmailAuthScreen() {
       borderRadius: 8,
       paddingVertical: 14,
       alignItems: "center",
+      justifyContent: "center",
+      minHeight: 50,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
     },
     buttonText: { color: "#fff", fontFamily: FontFamily.bold, fontSize: 16 },
   });
@@ -107,11 +132,22 @@ export default function EmailAuthScreen() {
           placeholderTextColor="#8e8e93"
         />
 
-        <View style={styles.button} accessibilityRole="button">
-          <Text style={styles.buttonText} onPress={onSubmit}>
-            {mode === "signin" ? "Sign in" : "Sign up"}
-          </Text>
-        </View>
+        <Pressable
+          style={[styles.button, !canSubmit && styles.buttonDisabled]}
+          accessibilityRole="button"
+          accessibilityLabel={mode === "signin" ? "Sign in" : "Sign up"}
+          accessibilityState={{ disabled: !canSubmit, busy: isSubmitting }}
+          disabled={!canSubmit}
+          onPress={onSubmit}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>
+              {mode === "signin" ? "Sign in" : "Sign up"}
+            </Text>
+          )}
+        </Pressable>
 
         <View style={styles.switchRow}>
           <Text style={{ color: colors.text }}>

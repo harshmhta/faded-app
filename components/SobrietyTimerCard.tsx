@@ -1,7 +1,6 @@
 import { FontFamily } from "@/constants/Fonts";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { sobrietyTimerService } from "@/lib/appwrite";
-import { router } from "expo-router";
+import { useProfile } from "@/contexts/ProfileContext";
 import {
   CrownIcon,
   Edit02Icon,
@@ -18,7 +17,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import {
-  Animated,
+  Alert,
   Modal,
   Platform,
   Pressable,
@@ -29,7 +28,6 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { ThemedText } from "./ThemedText";
 
 interface SobrietyTimerCardProps {
-  userId: string;
   onReset?: () => void;
 }
 
@@ -40,20 +38,21 @@ export interface SobrietyTimerCardRef {
 const SobrietyTimerCard = React.forwardRef<
   SobrietyTimerCardRef,
   SobrietyTimerCardProps
->(({ userId, onReset }, ref) => {
+>(({ onReset }, ref) => {
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
 
-  const [startTime, setStartTime] = useState<Date>(new Date());
+  // The quit date comes from the profile, which is also what the savings card
+  // and Luma read. There is no separate timer record, and nothing invents a
+  // start time when one hasn't been set.
+  const { quitDate, isLoading, resetQuitDate } = useProfile();
+
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [showResetModal, setShowResetModal] = useState(false);
   const [tempStartTime, setTempStartTime] = useState<Date>(new Date());
-  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Load timer from database
-  useEffect(() => {
-    loadTimer();
-  }, [userId]);
+  const startTime = quitDate;
 
   // Update current time every second
   useEffect(() => {
@@ -64,21 +63,10 @@ const SobrietyTimerCard = React.forwardRef<
     return () => clearInterval(interval);
   }, []);
 
-  const loadTimer = async () => {
-    try {
-      setIsLoading(true);
-      const timer = await sobrietyTimerService.getSobrietyTimer(userId);
-      if (timer) {
-        setStartTime(new Date(timer.startTime));
-      }
-    } catch (error) {
-      console.error("Error loading sobriety timer:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const calculateTimeDifference = () => {
+    if (!startTime) {
+      return { days: 0, hours: 0, minutes: 0, seconds: 0, totalHours: 0 };
+    }
     const diffMs = currentTime.getTime() - startTime.getTime();
     const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffSecs / 60);
@@ -154,7 +142,7 @@ const SobrietyTimerCard = React.forwardRef<
 
   const handleResetPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTempStartTime(new Date());
+    setTempStartTime(startTime ?? new Date());
     setShowResetModal(true);
   };
 
@@ -164,17 +152,25 @@ const SobrietyTimerCard = React.forwardRef<
   }));
 
   const handleConfirmReset = async () => {
+    if (isSaving) return;
+
+    setIsSaving(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      await sobrietyTimerService.resetSobrietyTimer(
-        userId,
-        tempStartTime.toISOString()
-      );
-      setStartTime(tempStartTime);
+      // Records the previous date in sobriety_resets so the change is auditable
+      // and a future "relapse history" view has something to read.
+      await resetQuitDate(tempStartTime);
       setShowResetModal(false);
       onReset?.();
     } catch (error) {
-      console.error("Error resetting timer:", error);
+      Alert.alert(
+        "Couldn't update your date",
+        error instanceof Error
+          ? error.message
+          : "Check your connection and try again.",
+      );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -182,6 +178,120 @@ const SobrietyTimerCard = React.forwardRef<
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setShowResetModal(false);
   };
+
+  const renderResetModal = () => (
+    <Modal
+      visible={showResetModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={handleCancelReset}
+    >
+      <View style={styles.modalOverlay}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={handleCancelReset}
+        />
+        <View
+          style={[
+            styles.modalContent,
+            {
+              backgroundColor: isDark
+                ? "rgba(30,30,30,0.98)"
+                : "rgba(255,255,255,0.98)",
+            },
+          ]}
+        >
+          <BlurView
+            tint={isDark ? "dark" : "light"}
+            intensity={80}
+            style={styles.modalBlur}
+          />
+
+          <View style={styles.modalInner}>
+            <ThemedText
+              style={[
+                styles.modalTitle,
+                isDark ? styles.textDark : styles.textLight,
+              ]}
+            >
+              Reset Sobriety Timer
+            </ThemedText>
+            <ThemedText
+              style={[
+                styles.modalDescription,
+                isDark ? styles.subtitleDark : styles.subtitleLight,
+              ]}
+            >
+              Set when you started your sobriety journey
+            </ThemedText>
+
+            <View style={styles.datePickerContainer}>
+              <DateTimePicker
+                value={tempStartTime}
+                mode="datetime"
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    setTempStartTime(selectedDate);
+                  }
+                }}
+                maximumDate={new Date()}
+                textColor={isDark ? "#FFFFFF" : "#000000"}
+                themeVariant={isDark ? "dark" : "light"}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={handleCancelReset}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.cancelButton,
+                  {
+                    opacity: pressed ? 0.6 : 1,
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.05)",
+                  },
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.modalButtonText,
+                    isDark ? styles.textDark : styles.textLight,
+                  ]}
+                >
+                  Cancel
+                </ThemedText>
+              </Pressable>
+
+              <Pressable
+                onPress={handleConfirmReset}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.confirmButton,
+                  {
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}
+              >
+                <LinearGradient
+                  colors={["#4CAF50", "#66BB6A"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.confirmButtonGradient}
+                >
+                  <ThemedText style={styles.confirmButtonText}>
+                    Start Timer
+                  </ThemedText>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (isLoading) {
     return (
@@ -204,6 +314,46 @@ const SobrietyTimerCard = React.forwardRef<
           <ThemedText style={styles.loadingText}>Loading...</ThemedText>
         </View>
       </View>
+    );
+  }
+
+  // No quit date yet. Prompt for one instead of showing a timer counting from
+  // an invented start — the old version silently created a record at "now" the
+  // first time this card mounted.
+  if (!startTime) {
+    return (
+      <>
+        <Pressable
+          onPress={handleResetPress}
+          accessibilityRole="button"
+          accessibilityLabel="Set your quit date"
+          style={({ pressed }) => [
+            styles.container,
+            {
+              opacity: pressed ? 0.85 : 1,
+              backgroundColor: isDark
+                ? "rgba(0,0,0,0.3)"
+                : "rgba(255,255,255,0.7)",
+            },
+          ]}
+        >
+          <BlurView
+            tint={isDark ? "dark" : "light"}
+            intensity={isDark ? 60 : 40}
+            style={styles.blurBackground}
+          />
+          <View style={styles.loadingContainer}>
+            <ThemedText style={styles.emptyTitle}>
+              Set your quit date
+            </ThemedText>
+            <ThemedText style={styles.emptySubtitle}>
+              Tap to choose when you started. Your streak and savings are
+              counted from here.
+            </ThemedText>
+          </View>
+        </Pressable>
+        {renderResetModal()}
+      </>
     );
   }
 
@@ -256,7 +406,7 @@ const SobrietyTimerCard = React.forwardRef<
                 isDark ? styles.textDark : styles.textLight,
               ]}
             >
-              I've been sober for
+              I&apos;ve been sober for
             </ThemedText>
             <Pressable
               onPress={handleResetPress}
@@ -418,118 +568,7 @@ const SobrietyTimerCard = React.forwardRef<
         </View>
       </View>
 
-      {/* Reset Modal */}
-      <Modal
-        visible={showResetModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleCancelReset}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={handleCancelReset}
-          />
-          <View
-            style={[
-              styles.modalContent,
-              {
-                backgroundColor: isDark
-                  ? "rgba(30,30,30,0.98)"
-                  : "rgba(255,255,255,0.98)",
-              },
-            ]}
-          >
-            <BlurView
-              tint={isDark ? "dark" : "light"}
-              intensity={80}
-              style={styles.modalBlur}
-            />
-
-            <View style={styles.modalInner}>
-              <ThemedText
-                style={[
-                  styles.modalTitle,
-                  isDark ? styles.textDark : styles.textLight,
-                ]}
-              >
-                Reset Sobriety Timer
-              </ThemedText>
-              <ThemedText
-                style={[
-                  styles.modalDescription,
-                  isDark ? styles.subtitleDark : styles.subtitleLight,
-                ]}
-              >
-                Set when you started your sobriety journey
-              </ThemedText>
-
-              <View style={styles.datePickerContainer}>
-                <DateTimePicker
-                  value={tempStartTime}
-                  mode="datetime"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) {
-                      setTempStartTime(selectedDate);
-                    }
-                  }}
-                  maximumDate={new Date()}
-                  textColor={isDark ? "#FFFFFF" : "#000000"}
-                  themeVariant={isDark ? "dark" : "light"}
-                />
-              </View>
-
-              <View style={styles.modalButtons}>
-                <Pressable
-                  onPress={handleCancelReset}
-                  style={({ pressed }) => [
-                    styles.modalButton,
-                    styles.cancelButton,
-                    {
-                      opacity: pressed ? 0.6 : 1,
-                      backgroundColor: isDark
-                        ? "rgba(255,255,255,0.1)"
-                        : "rgba(0,0,0,0.05)",
-                    },
-                  ]}
-                >
-                  <ThemedText
-                    style={[
-                      styles.modalButtonText,
-                      isDark ? styles.textDark : styles.textLight,
-                    ]}
-                  >
-                    Cancel
-                  </ThemedText>
-                </Pressable>
-
-                <Pressable
-                  onPress={handleConfirmReset}
-                  style={({ pressed }) => [
-                    styles.modalButton,
-                    styles.confirmButton,
-                    {
-                      opacity: pressed ? 0.8 : 1,
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={["#4CAF50", "#66BB6A"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.confirmButtonGradient}
-                  >
-                    <ThemedText style={styles.confirmButtonText}>
-                      Start Timer
-                    </ThemedText>
-                  </LinearGradient>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {renderResetModal()}
     </>
   );
 });
@@ -561,6 +600,18 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontFamily: FontFamily.medium,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontFamily: FontFamily.medium,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    opacity: 0.65,
   },
   mainContent: {
     padding: 20,
@@ -708,5 +759,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.6)",
   },
 });
+
+SobrietyTimerCard.displayName = "SobrietyTimerCard";
 
 export default SobrietyTimerCard;

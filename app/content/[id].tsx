@@ -292,8 +292,8 @@ export default function ContentDetailScreen() {
               isDark ? styles.infoTextDark : styles.infoTextLight,
             ]}
           >
-            This {contentItem.type} is categorized under "{contentItem.category}
-            " and is suitable for{" "}
+            This {contentItem.type} is categorized under &ldquo;{contentItem.category}
+            &rdquo; and is suitable for{" "}
             {contentItem.difficulty <= 2
               ? "beginners"
               : contentItem.difficulty <= 3

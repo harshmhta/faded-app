@@ -14,6 +14,7 @@ import SobrietyTimerCard, { SobrietyTimerCardRef } from "@/components/SobrietyTi
 import { ThemedText } from "@/components/ThemedText";
 import { FontFamily } from "@/constants/Fonts";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/contexts/ProfileContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { Alert02Icon, ArrowRight01Icon, Tick01Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
@@ -152,20 +153,27 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const params = useLocalSearchParams();
 
-  // Mock data - in a real app, this would come from user preferences/storage
-  const [sobrietyStartDate] = useState(
-    new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-  ); // 5 days ago
-  const [dailySpending, setDailySpending] = useState(15);
-  const [consumptionStatus, setConsumptionStatus] = useState<ConsumptionStatus | null>(null);
-  const [timerKey, setTimerKey] = useState(0); // Key to force re-render of timer
+  // Quit date and daily spend both come from the profile, so the timer and the
+  // savings card can no longer disagree with each other.
+  const { quitDate, dailySpend, setDailySpend, refresh } = useProfile();
+  const [consumptionStatus, setConsumptionStatus] =
+    useState<ConsumptionStatus | null>(null);
 
-  // Refresh timer when explicitly requested via params
+  // Refresh profile when a child screen signals the quit date changed.
   useEffect(() => {
-    if (params.refreshTimer === 'true') {
-      setTimerKey((prev) => prev + 1);
+    if (params.refreshTimer === "true") {
+      refresh();
     }
-  }, [params.refreshTimer]);
+  }, [params.refreshTimer, refresh]);
+
+  const handleDailySpendChange = useCallback(
+    (amount: number) => {
+      setDailySpend(amount).catch(() => {
+        // Optimistic update already reverted inside the context.
+      });
+    },
+    [setDailySpend],
+  );
 
   const handleConsumedPress = () => {
     // Open the reset modal when user clicks "I Consumed"
@@ -186,12 +194,16 @@ export default function HomeScreen() {
         {/* Your Progress Section */}
         <View style={styles.firstSection}>
           <ThemedText style={styles.sectionTitle}>Your Progress</ThemedText>
-          {user && (
-            <SobrietyTimerCard
-              ref={timerCardRef}
-              key={timerKey}
-              userId={user.$id}
-              onReset={() => setTimerKey((prev) => prev + 1)}
+          {user && <SobrietyTimerCard ref={timerCardRef} onReset={refresh} />}
+
+          {/* Savings was built but had been dropped from this layout — the
+              component was imported and never rendered. Now wired to the real
+              quit date and spend instead of the placeholder values. */}
+          {quitDate && (
+            <SavingsCalculatorCardCompact
+              startDate={quitDate}
+              dailySpending={dailySpend}
+              onDailySpendingChange={handleDailySpendChange}
             />
           )}
         </View>
@@ -300,7 +312,7 @@ export default function HomeScreen() {
 
         {/* Insights Section */}
         <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Today's Insights</ThemedText>
+          <ThemedText style={styles.sectionTitle}>Today&apos;s Insights</ThemedText>
           <MotivationalQuoteCardCompact />
         </View>
 

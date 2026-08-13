@@ -18,6 +18,7 @@ import { Colors } from "@/constants/Colors";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ConsumptionProvider } from "@/contexts/ConsumptionContext";
 import { CourseProgressProvider } from "@/contexts/CourseProgressContext";
+import { ProfileProvider } from "@/contexts/ProfileContext";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 
 export default function RootLayout() {
@@ -51,6 +52,7 @@ export default function RootLayout() {
     <KeyboardProvider>
       <ThemeProvider>
         <AuthProvider>
+          <ProfileProvider>
           <ConsumptionProvider>
             <CourseProgressProvider>
               <ThemeWrapper>
@@ -132,6 +134,7 @@ export default function RootLayout() {
             </ThemeWrapper>
             </CourseProgressProvider>
           </ConsumptionProvider>
+          </ProfileProvider>
         </AuthProvider>
       </ThemeProvider>
     </KeyboardProvider>

@@ -4,7 +4,7 @@ import { Colors } from "@/constants/Colors";
 import { FontFamily } from "@/constants/Fonts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { sobrietyTimerService } from "@/lib/appwrite";
+import { useProfile } from "@/contexts/ProfileContext";
 import { Cancel01Icon, CancelCircleHalfDotIcon, FirePitIcon } from "@hugeicons/core-free-icons";
 import { useConsumption } from "@/contexts/ConsumptionContext";
 import { HugeiconsIcon } from "@hugeicons/react-native";
@@ -17,6 +17,7 @@ import {
   ActivityIndicator,
   Dimensions,
   InputAccessoryView,
+  Alert,
   Keyboard,
   Modal,
   Platform,
@@ -32,12 +33,19 @@ import {
 } from "react-native-keyboard-controller";
 import { useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { toEntryDate } from "@/lib/dates";
+import type { ConsumptionStatusValue } from "@/lib/database.types";
 
 const { width: screenWidth } = Dimensions.get("window");
 const WEEK_WIDTH = screenWidth - 75;
 const WEEK_SPACING = 30;
 
-const CONSUMPTION_OPTIONS = [
+const CONSUMPTION_OPTIONS: {
+  id: ConsumptionStatusValue;
+  icon: typeof CancelCircleHalfDotIcon;
+  label: string;
+  color: string;
+}[] = [
   { id: "clean", icon: CancelCircleHalfDotIcon, label: "Didn't Smoke", color: "#4CAF50" },
   { id: "smoked", icon: FirePitIcon, label: "Smoked", color: "#F44336" },
 ];
@@ -49,13 +57,15 @@ export default function TrackConsumptionScreen() {
   const { user } = useAuth();
   const params = useLocalSearchParams();
   const { consumptionHistory, loadConsumptionHistory, saveConsumption, isLoading: isLoadingHistory } = useConsumption();
+  const { resetQuitDate } = useProfile();
 
   // Parse date from URL params if provided
   const initialDate = params.date 
     ? new Date(params.date as string + 'T00:00:00')
     : new Date();
 
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] =
+    useState<ConsumptionStatusValue | null>(null);
   const [comment, setComment] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate);
@@ -141,8 +151,8 @@ export default function TrackConsumptionScreen() {
     const startDate = new Date(weeks[0][0]);
     const endDate = new Date(weeks[weeks.length - 1][6]);
     loadConsumptionHistory(
-      startDate.toISOString().split("T")[0],
-      endDate.toISOString().split("T")[0]
+      toEntryDate(startDate),
+      toEntryDate(endDate)
     );
   }, []);
 
@@ -152,7 +162,7 @@ export default function TrackConsumptionScreen() {
   }, [selectedDate, consumptionHistory]);
 
   const loadConsumptionForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toEntryDate(date);
     const tracking = consumptionHistory.get(dateStr);
 
     if (tracking) {
@@ -207,10 +217,9 @@ export default function TrackConsumptionScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const dateStr = selectedDate.toISOString().split("T")[0];
-      
-      // Use context's optimistic update
-      await saveConsumption(selectedStatus, comment, dateStr);
+      // Context applies an optimistic update, then upserts on
+      // (user_id, entry_date) — no read-then-write race on a double tap.
+      await saveConsumption(selectedStatus, comment, selectedDate);
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -225,8 +234,13 @@ export default function TrackConsumptionScreen() {
         }, 300);
       }
     } catch (error) {
-      console.error("Error saving consumption:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't save that",
+        error instanceof Error
+          ? error.message
+          : "Check your connection and try again.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -239,8 +253,9 @@ export default function TrackConsumptionScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     try {
-      // Reset the sobriety timer with selected time
-      await sobrietyTimerService.resetSobrietyTimer(user.$id, resetStartTime.toISOString());
+      // Moves the quit date on the profile and records the previous value
+      // in sobriety_resets.
+      await resetQuitDate(resetStartTime, "Logged a relapse");
 
       // Save the consumption tracking
       await saveConsumptionTracking();
@@ -253,8 +268,13 @@ export default function TrackConsumptionScreen() {
         router.replace('/(tabs)?refreshTimer=true');
       }, 300);
     } catch (error) {
-      console.error("Error resetting timer:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't update your date",
+        error instanceof Error
+          ? error.message
+          : "Check your connection and try again.",
+      );
     } finally {
       setIsResettingTimer(false);
     }
@@ -317,7 +337,7 @@ export default function TrackConsumptionScreen() {
         const isTodayDate = isToday(date);
         const isSelected =
           selectedDate?.toDateString() === date.toDateString();
-        const dateStr = date.toISOString().split("T")[0];
+        const dateStr = toEntryDate(date);
         const hasTracking = consumptionHistory.has(dateStr);
         const trackingForDate = consumptionHistory.get(dateStr);
 
@@ -396,7 +416,7 @@ export default function TrackConsumptionScreen() {
   };
 
   const isSelectedDateToday = isToday(selectedDate);
-  const selectedDateStr = selectedDate.toISOString().split("T")[0];
+  const selectedDateStr = toEntryDate(selectedDate);
   const hasHistoricalTracking = consumptionHistory.has(selectedDateStr);
 
   return (

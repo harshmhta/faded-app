@@ -120,7 +120,7 @@ export default function QuizScreen() {
         return <MultipleChoiceQuestion
           question={currentQuestion}
           selectedAnswer={answers[currentQuestion.id] as string}
-          onSelectAnswer={(answer) => setAnswers({ ...answers, [currentQuestion.id]: answer })}
+          onSelectAnswer={(answer: string) => setAnswers({ ...answers, [currentQuestion.id]: answer })}
           showResult={showResult}
           isDark={isDark}
         />;
@@ -129,7 +129,7 @@ export default function QuizScreen() {
         return <MultiSelectQuestion
           question={currentQuestion}
           selectedAnswers={(answers[currentQuestion.id] as string[]) || []}
-          onSelectAnswers={(selected) => setAnswers({ ...answers, [currentQuestion.id]: selected })}
+          onSelectAnswers={(selected: string[]) => setAnswers({ ...answers, [currentQuestion.id]: selected })}
           showResult={showResult}
           isDark={isDark}
         />;
@@ -138,7 +138,7 @@ export default function QuizScreen() {
         return <MatchingQuestion
           question={currentQuestion}
           matches={(answers[currentQuestion.id] as { [conceptId: string]: string }) || {}}
-          onUpdateMatches={(matches) => setAnswers({ ...answers, [currentQuestion.id]: matches })}
+          onUpdateMatches={(matches: { [conceptId: string]: string }) => setAnswers({ ...answers, [currentQuestion.id]: matches })}
           showResult={showResult}
           isDark={isDark}
         />;

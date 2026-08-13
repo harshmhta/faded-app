@@ -83,13 +83,12 @@ export function useTheme() {
 }
 
 // Custom hook to replace useColorScheme throughout the app
-export function useColorScheme(): ColorScheme | null {
+export function useColorScheme(): ColorScheme {
+  // Both hooks run on every render. Previously useSystemColorScheme() sat
+  // behind an early return, so a component rendered once outside the provider
+  // and once inside it changed hook order and threw.
   const themeContext = useContext(ThemeContext);
+  const systemColorScheme = useSystemColorScheme();
 
-  if (themeContext) {
-    return themeContext.colorScheme;
-  }
-
-  // Fallback to system if ThemeProvider not available
-  return useSystemColorScheme() ?? "light";
+  return themeContext?.colorScheme ?? systemColorScheme ?? "light";
 }

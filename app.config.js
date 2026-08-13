@@ -7,7 +7,10 @@ export default {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
-    scheme: `appwrite-callback-${process.env.EXPO_PUBLIC_APPWRITE_PROJECT_ID}`,
+    // Our own scheme, so it no longer depends on a vendor's callback naming
+    // and can't resolve to "...-undefined" when an env var is missing.
+    // Must match the redirect URL allow-list in Supabase Auth settings.
+    scheme: "faded",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
     ios: {

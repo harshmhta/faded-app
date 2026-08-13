@@ -4,7 +4,8 @@ import { Colors } from "@/constants/Colors";
 import { FontFamily } from "@/constants/Fonts";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
-import { MoodCheckIn, moodCheckInService } from "@/lib/appwrite";
+import { moodService } from "@/lib/db";
+import type { MoodCheckIn } from "@/lib/database.types";
 import { Cancel01Icon, AngelIcon, SmileIcon, ConfusedIcon, CryingIcon, DeadIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react-native";
 import { BlurView } from "expo-blur";
@@ -29,6 +30,7 @@ import {
 } from "react-native-keyboard-controller";
 import { useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { toEntryDate } from "@/lib/dates";
 
 const { width: screenWidth } = Dimensions.get("window");
 const WEEK_WIDTH = screenWidth - 75;
@@ -148,15 +150,15 @@ export default function CheckInScreen() {
       const startDate = new Date(weeks[0][0]);
       const endDate = new Date(weeks[weeks.length - 1][6]);
 
-      const checkIns = await moodCheckInService.getMoodCheckInsByDateRange(
-        user.$id,
-        startDate.toISOString().split("T")[0],
-        endDate.toISOString().split("T")[0]
+      const checkIns = await moodService.getRange(
+        user.id,
+        toEntryDate(startDate),
+        toEntryDate(endDate)
       );
 
       const historyMap = new Map<string, MoodCheckIn>();
       checkIns.forEach((checkIn) => {
-        historyMap.set(checkIn.date, checkIn);
+        historyMap.set(checkIn.entry_date, checkIn);
       });
 
       setMoodHistory(historyMap);
@@ -168,7 +170,7 @@ export default function CheckInScreen() {
   };
 
   const loadMoodForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = toEntryDate(date);
     const checkIn = moodHistory.get(dateStr);
 
     if (checkIn) {
@@ -209,13 +211,7 @@ export default function CheckInScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const dateStr = selectedDate.toISOString().split("T")[0];
-      await moodCheckInService.saveMoodCheckIn(
-        user.$id,
-        selectedMood,
-        comment,
-        dateStr
-      );
+      await moodService.save(user.id, selectedMood, comment, selectedDate);
       await loadMoodHistory();
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -286,7 +282,7 @@ export default function CheckInScreen() {
         const isTodayDate = isToday(date);
         const isSelected =
           selectedDate?.toDateString() === date.toDateString();
-        const dateStr = date.toISOString().split("T")[0];
+        const dateStr = toEntryDate(date);
         const hasMood = moodHistory.has(dateStr);
         const moodForDate = moodHistory.get(dateStr);
 
@@ -362,7 +358,7 @@ export default function CheckInScreen() {
   };
 
   const isSelectedDateToday = isToday(selectedDate);
-  const selectedDateStr = selectedDate.toISOString().split("T")[0];
+  const selectedDateStr = toEntryDate(selectedDate);
   const hasHistoricalMood = moodHistory.has(selectedDateStr);
 
   return (

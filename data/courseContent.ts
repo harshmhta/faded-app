@@ -1,4 +1,4 @@
-import { Course, CourseChapter, QuizQuestion } from '@/types/course';
+import { Course, CourseChapter, CourseSection, QuizQuestion } from '@/types/course';
 
 const chapter1Questions: QuizQuestion[] = [
   {

@@ -20,21 +20,23 @@ export default function SignInScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
 
+  // An empty message means the user cancelled — say nothing rather than
+  // popping an error alert at someone who deliberately backed out.
   const handleAppleSignIn = async () => {
-    try {
-      const success = await signInWithApple();
+    const result = await signInWithApple();
+    if (result.ok) {
+      router.replace("/(tabs)");
+    } else if (result.message) {
+      Alert.alert("Couldn't sign in", result.message);
+    }
+  };
 
-      if (success) {
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert("Error", "Failed to sign in with Apple. Please try again.");
-      }
-    } catch (error) {
-      console.error("Apple sign in error:", error);
-      Alert.alert(
-        "Error",
-        "An error occurred during sign in. Please try again.",
-      );
+  const handleGoogleSignIn = async () => {
+    const result = await signInWithGoogle();
+    if (result.ok) {
+      router.replace("/(tabs)");
+    } else if (result.message) {
+      Alert.alert("Couldn't sign in", result.message);
     }
   };
 
@@ -126,12 +128,7 @@ export default function SignInScreen() {
           accessibilityRole="button"
           accessibilityLabel="Sign in with Google"
           disabled={isLoading}
-          onPress={async () => {
-            const ok = await signInWithGoogle();
-            if (!ok) {
-              Alert.alert("Error", "Failed to start Google sign in.");
-            }
-          }}
+          onPress={handleGoogleSignIn}
           style={styles.googleButton}
         >
           <View style={styles.googleContent}>

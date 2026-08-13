@@ -25,16 +25,6 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
 ## Learn more
 
 To learn more about developing your project with Expo, look at the following resources:
@@ -51,17 +41,19 @@ Join our community of developers creating universal apps.
 
 ## Environment Setup
 
-This project uses environment variables for sensitive configuration. Follow these steps:
+1. Copy `.env.example` to `.env` and fill in your Supabase project URL and anon key.
+2. Follow [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) to create the database schema,
+   configure auth providers, and deploy the Luma Edge Function.
 
-1. Copy `.env.example` to `.env`: `cp .env.example .env`
-2. Update the values in `.env` with your actual configuration
-3. Never commit `.env` to version control (it's already in .gitignore)
+### Environment variables
 
-### Environment Variables
+| Variable | Purpose |
+| --- | --- |
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (safe to ship — every table is behind RLS) |
+| `EAS_PROJECT_ID` | EAS project ID |
 
-- `EXPO_PUBLIC_APPWRITE_ENDPOINT`: Your Appwrite server endpoint
-- `EXPO_PUBLIC_APPWRITE_PROJECT_ID`: Your Appwrite project ID
-- `EXPO_PUBLIC_APPWRITE_PLATFORM`: Your app platform identifier
-- `EAS_PROJECT_ID`: Your EAS (Expo Application Services) project ID
-
-Note: Variables prefixed with `EXPO_PUBLIC_` are available in the client-side code.
+Variables prefixed with `EXPO_PUBLIC_` are inlined into the app bundle at build
+time and are extractable from a shipped binary. Never give that prefix to a
+provider API key. The Gemini key is a Supabase Edge Function secret — see
+SUPABASE_SETUP.md.

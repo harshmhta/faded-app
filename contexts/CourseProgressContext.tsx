@@ -1,22 +1,56 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CourseProgress } from '@/types/course';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { courseProgressService } from "@/lib/db";
+import { toEntryDate } from "@/lib/dates";
+import { LOCAL_KEYS } from "@/lib/supabase";
+import type { CourseProgressRow } from "@/lib/database.types";
+import { CourseProgress } from "@/types/course";
+
+/**
+ * Course progress is server-backed so it survives a reinstall or a device
+ * switch — previously it lived only in AsyncStorage under a global key, so the
+ * sobriety timer persisted while the entire course journey did not.
+ *
+ * A per-user local cache is still kept, but only to paint instantly on launch
+ * and to keep the course usable offline. Supabase is the source of truth.
+ */
 
 interface CourseProgressContextType {
   progress: CourseProgress | null;
   loading: boolean;
+  /** Set when a sync fails. Local progress is retained regardless. */
+  error: string | null;
   updateProgress: (updates: Partial<CourseProgress>) => Promise<void>;
-  completeSection: (chapterId: string, sectionId: string, xpEarned: number) => Promise<void>;
-  completeChapter: (chapterId: string, quizScore: number, xpEarned: number) => Promise<void>;
+  completeSection: (
+    chapterId: string,
+    sectionId: string,
+    xpEarned: number,
+  ) => Promise<void>;
+  completeChapter: (
+    chapterId: string,
+    quizScore: number,
+    xpEarned: number,
+  ) => Promise<void>;
   isChapterUnlocked: (chapterNumber: number) => boolean;
   isSectionCompleted: (chapterId: string, sectionId: string) => boolean;
   calculateStreak: () => Promise<void>;
   resetProgress: () => Promise<void>;
 }
 
-const CourseProgressContext = createContext<CourseProgressContextType | undefined>(undefined);
-
-const STORAGE_KEY = 'course_progress';
+const CourseProgressContext = createContext<
+  CourseProgressContextType | undefined
+>(undefined);
 
 const initialProgress: CourseProgress = {
   currentChapter: 1,
@@ -30,173 +64,257 @@ const initialProgress: CourseProgress = {
   lastStreakDate: null,
 };
 
-export function CourseProgressProvider({ children }: { children: React.ReactNode }) {
+function rowToProgress(row: CourseProgressRow): CourseProgress {
+  return {
+    currentChapter: row.current_chapter,
+    currentSection: row.current_section,
+    completedSections: row.completed_sections ?? [],
+    completedChapters: row.completed_chapters ?? [],
+    quizScores: row.quiz_scores ?? {},
+    lastAccessedAt: row.last_accessed_at,
+    totalXP: row.total_xp,
+    streakDays: row.streak_days,
+    lastStreakDate: row.last_streak_date,
+  };
+}
+
+function progressToPatch(progress: CourseProgress) {
+  return {
+    current_chapter: progress.currentChapter,
+    current_section: progress.currentSection,
+    completed_sections: progress.completedSections,
+    completed_chapters: progress.completedChapters,
+    quiz_scores: progress.quizScores,
+    total_xp: progress.totalXP,
+    streak_days: progress.streakDays,
+    last_streak_date: progress.lastStreakDate,
+  };
+}
+
+export function CourseProgressProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [progress, setProgress] = useState<CourseProgress | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+
+  userIdRef.current = user?.id ?? null;
+
+  const cacheKey = user ? LOCAL_KEYS.courseProgress(user.id) : null;
+
+  /** Write local first (instant, offline-safe), then push to Supabase. */
+  const persist = useCallback(
+    async (next: CourseProgress) => {
+      setProgress(next);
+
+      if (cacheKey) {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(next)).catch(() => {
+          // A cache write failure is not worth interrupting the lesson over.
+        });
+      }
+
+      const userId = userIdRef.current;
+      if (!userId) return;
+
+      try {
+        await courseProgressService.update(userId, progressToPatch(next));
+        setError(null);
+      } catch (err) {
+        // Keep the local value — the user earned it. Surface the sync failure
+        // without rolling their progress back.
+        setError(
+          err instanceof Error
+            ? `Progress saved on this device but not synced: ${err.message}`
+            : "Progress saved on this device but not synced.",
+        );
+      }
+    },
+    [cacheKey],
+  );
 
   useEffect(() => {
-    loadProgress();
-  }, []);
+    let active = true;
 
-  const loadProgress = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsedProgress = JSON.parse(stored);
-        setProgress(parsedProgress);
-        // Calculate streak on load
-        await calculateStreakInternal(parsedProgress);
-      } else {
-        setProgress(initialProgress);
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initialProgress));
+    const load = async () => {
+      if (!user || !cacheKey) {
+        setProgress(null);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('Error loading course progress:', error);
-      setProgress(initialProgress);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const updateProgress = async (updates: Partial<CourseProgress>) => {
-    if (!progress) return;
+      setLoading(true);
 
-    const updatedProgress = {
-      ...progress,
-      ...updates,
-      lastAccessedAt: new Date().toISOString(),
+      // Paint from cache immediately so the course tab isn't blank on launch.
+      try {
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached && active) {
+          setProgress(JSON.parse(cached) as CourseProgress);
+        }
+      } catch {
+        // Corrupt cache is not fatal; the server copy follows.
+      }
+
+      try {
+        const row = await courseProgressService.ensure(user.id);
+        if (!active) return;
+        const serverProgress = rowToProgress(row);
+        setProgress(serverProgress);
+        setError(null);
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(serverProgress));
+      } catch (err) {
+        if (!active) return;
+        setError(
+          err instanceof Error ? err.message : "Couldn't sync course progress.",
+        );
+        // Fall back to the cache, or a fresh slate if there wasn't one.
+        setProgress((current) => current ?? initialProgress);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
 
-    setProgress(updatedProgress);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
-  };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [user, cacheKey]);
 
-  const completeSection = async (chapterId: string, sectionId: string, xpEarned: number) => {
+  const updateProgress = useCallback(
+    async (updates: Partial<CourseProgress>) => {
+      if (!progress) return;
+      await persist({
+        ...progress,
+        ...updates,
+        lastAccessedAt: new Date().toISOString(),
+      });
+    },
+    [progress, persist],
+  );
+
+  const completeSection = useCallback(
+    async (chapterId: string, sectionId: string, xpEarned: number) => {
+      if (!progress) return;
+
+      const sectionKey = `${chapterId}-${sectionId}`;
+      if (progress.completedSections.includes(sectionKey)) return;
+
+      await persist({
+        ...progress,
+        completedSections: [...progress.completedSections, sectionKey],
+        totalXP: progress.totalXP + xpEarned,
+        lastAccessedAt: new Date().toISOString(),
+      });
+    },
+    [progress, persist],
+  );
+
+  const completeChapter = useCallback(
+    async (chapterId: string, quizScore: number, xpEarned: number) => {
+      if (!progress) return;
+
+      const chapterNumber = Number.parseInt(chapterId.split("-")[1], 10);
+      const alreadyComplete = progress.completedChapters.includes(chapterId);
+
+      await persist({
+        ...progress,
+        completedChapters: [
+          ...new Set([...progress.completedChapters, chapterId]),
+        ],
+        quizScores: { ...progress.quizScores, [chapterId]: quizScore },
+        // Don't re-award XP for retaking a quiz already passed.
+        totalXP: progress.totalXP + (alreadyComplete ? 0 : xpEarned),
+        currentChapter: Number.isFinite(chapterNumber)
+          ? Math.max(progress.currentChapter, chapterNumber + 1)
+          : progress.currentChapter,
+        lastAccessedAt: new Date().toISOString(),
+      });
+    },
+    [progress, persist],
+  );
+
+  const isChapterUnlocked = useCallback(
+    (chapterNumber: number) => {
+      if (!progress) return false;
+      if (chapterNumber === 1) return true;
+      return progress.completedChapters.includes(`chapter-${chapterNumber - 1}`);
+    },
+    [progress],
+  );
+
+  const isSectionCompleted = useCallback(
+    (chapterId: string, sectionId: string) =>
+      progress?.completedSections.includes(`${chapterId}-${sectionId}`) ?? false,
+    [progress],
+  );
+
+  const calculateStreak = useCallback(async () => {
     if (!progress) return;
 
-    const sectionKey = `${chapterId}-${sectionId}`;
-    if (progress.completedSections.includes(sectionKey)) return;
+    const today = toEntryDate();
 
-    const updatedProgress = {
-      ...progress,
-      completedSections: [...progress.completedSections, sectionKey],
-      totalXP: progress.totalXP + xpEarned,
-      lastAccessedAt: new Date().toISOString(),
-    };
-
-    setProgress(updatedProgress);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
-  };
-
-  const completeChapter = async (chapterId: string, quizScore: number, xpEarned: number) => {
-    if (!progress) return;
-
-    const chapterNumber = parseInt(chapterId.split('-')[1]);
-    const updatedProgress = {
-      ...progress,
-      completedChapters: [...new Set([...progress.completedChapters, chapterId])],
-      quizScores: { ...progress.quizScores, [chapterId]: quizScore },
-      totalXP: progress.totalXP + xpEarned,
-      currentChapter: Math.max(progress.currentChapter, chapterNumber + 1),
-      lastAccessedAt: new Date().toISOString(),
-    };
-
-    setProgress(updatedProgress);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
-  };
-
-  const isChapterUnlocked = (chapterNumber: number): boolean => {
-    if (!progress) return false;
-    if (chapterNumber === 1) return true;
-    
-    const previousChapterId = `chapter-${chapterNumber - 1}`;
-    return progress.completedChapters.includes(previousChapterId);
-  };
-
-  const isSectionCompleted = (chapterId: string, sectionId: string): boolean => {
-    if (!progress) return false;
-    return progress.completedSections.includes(`${chapterId}-${sectionId}`);
-  };
-
-  const calculateStreakInternal = async (currentProgress: CourseProgress) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    if (!currentProgress.lastStreakDate) {
-      const updatedProgress = {
-        ...currentProgress,
-        streakDays: 1,
-        lastStreakDate: today.toISOString(),
-      };
-      setProgress(updatedProgress);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
+    if (!progress.lastStreakDate) {
+      await persist({ ...progress, streakDays: 1, lastStreakDate: today });
       return;
     }
 
-    const lastStreak = new Date(currentProgress.lastStreakDate);
-    lastStreak.setHours(0, 0, 0, 0);
-    
-    const diffTime = Math.abs(today.getTime() - lastStreak.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Stored as a date key going forward, but older rows may hold a full ISO
+    // timestamp — take the date portion either way.
+    const last = progress.lastStreakDate.slice(0, 10);
+    if (last === today) return;
 
-    if (diffDays === 0) {
-      // Same day, no change
-      return;
-    } else if (diffDays === 1) {
-      // Next day, increment streak
-      const updatedProgress = {
-        ...currentProgress,
-        streakDays: currentProgress.streakDays + 1,
-        lastStreakDate: today.toISOString(),
-      };
-      setProgress(updatedProgress);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
-    } else {
-      // Streak broken, reset to 1
-      const updatedProgress = {
-        ...currentProgress,
-        streakDays: 1,
-        lastStreakDate: today.toISOString(),
-      };
-      setProgress(updatedProgress);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProgress));
-    }
-  };
+    const yesterday = toEntryDate(new Date(Date.now() - 86_400_000));
 
-  const calculateStreak = async () => {
-    if (progress) {
-      await calculateStreakInternal(progress);
-    }
-  };
+    await persist({
+      ...progress,
+      streakDays: last === yesterday ? progress.streakDays + 1 : 1,
+      lastStreakDate: today,
+    });
+  }, [progress, persist]);
 
-  const resetProgress = async () => {
-    setProgress(initialProgress);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initialProgress));
-  };
+  const resetProgress = useCallback(async () => {
+    await persist({ ...initialProgress, lastAccessedAt: new Date().toISOString() });
+  }, [persist]);
+
+  const value = useMemo(
+    () => ({
+      progress,
+      loading,
+      error,
+      updateProgress,
+      completeSection,
+      completeChapter,
+      isChapterUnlocked,
+      isSectionCompleted,
+      calculateStreak,
+      resetProgress,
+    }),
+    [
+      progress,
+      loading,
+      error,
+      updateProgress,
+      completeSection,
+      completeChapter,
+      isChapterUnlocked,
+      isSectionCompleted,
+      calculateStreak,
+      resetProgress,
+    ],
+  );
 
   return (
-    <CourseProgressContext.Provider
-      value={{
-        progress,
-        loading,
-        updateProgress,
-        completeSection,
-        completeChapter,
-        isChapterUnlocked,
-        isSectionCompleted,
-        calculateStreak,
-        resetProgress,
-      }}
-    >
+    <CourseProgressContext.Provider value={value}>
       {children}
     </CourseProgressContext.Provider>
   );
 }
 
-export const useCourseProgress = () => {
+export function useCourseProgress() {
   const context = useContext(CourseProgressContext);
   if (context === undefined) {
-    throw new Error('useCourseProgress must be used within a CourseProgressProvider');
+    throw new Error(
+      "useCourseProgress must be used within a CourseProgressProvider",
+    );
   }
   return context;
-};
+}
