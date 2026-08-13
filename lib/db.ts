@@ -21,6 +21,7 @@ import type {
   ConsumptionStatusValue,
   CourseProgressRow,
   MoodCheckIn,
+  OnboardingAnswers,
   Profile,
 } from "./database.types";
 
@@ -66,6 +67,7 @@ export const profileService = {
       daily_spend?: number;
       currency?: string;
       onboarded_at?: string | null;
+      onboarding_answers?: OnboardingAnswers;
     },
   ): Promise<Profile> {
     const result = await supabase
@@ -87,13 +89,26 @@ export const profileService = {
    */
   async completeOnboarding(
     userId: string,
-    input: { dailySpend: number; currency?: string; quitDate?: Date },
+    input: {
+      dailySpend: number;
+      currency?: string;
+      quitDate?: Date;
+      answers?: OnboardingAnswers;
+    },
   ): Promise<Profile> {
     return this.update(userId, {
       daily_spend: input.dailySpend,
       currency: input.currency ?? "USD",
       onboarded_at: new Date().toISOString(),
       ...(input.quitDate ? { quit_date: input.quitDate.toISOString() } : {}),
+      ...(input.answers
+        ? {
+            onboarding_answers: {
+              ...input.answers,
+              completedAt: new Date().toISOString(),
+            },
+          }
+        : {}),
     });
   },
 

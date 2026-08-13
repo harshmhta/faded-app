@@ -11,7 +11,7 @@ import React, {
 import { useAuth } from "@/contexts/AuthContext";
 import { profileService } from "@/lib/db";
 import { daysBetween } from "@/lib/dates";
-import type { Profile } from "@/lib/database.types";
+import type { OnboardingAnswers, Profile } from "@/lib/database.types";
 
 /**
  * The single source of truth for quit date and spending baseline.
@@ -47,6 +47,7 @@ export interface ProfileContextType {
     currency?: string;
     /** Only if onboarding lets the user backdate to before signup. */
     quitDate?: Date;
+    answers?: OnboardingAnswers;
   }) => Promise<void>;
   setDailySpend: (amount: number) => Promise<void>;
   resetQuitDate: (newQuitDate: Date, reason?: string) => Promise<void>;
@@ -88,6 +89,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       dailySpend: number;
       currency?: string;
       quitDate?: Date;
+      answers?: OnboardingAnswers;
     }) => {
       if (!user) throw new Error("Not signed in");
       setProfile(await profileService.completeOnboarding(user.id, input));

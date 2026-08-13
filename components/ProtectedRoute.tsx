@@ -1,5 +1,6 @@
 import { Colors } from "@/constants/Colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/contexts/ProfileContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { router, useSegments } from "expo-router";
 import React, { useEffect } from "react";
@@ -11,6 +12,11 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
+  const {
+    isOnboarded,
+    isLoading: profileLoading,
+    profile,
+  } = useProfile();
   const segments = useSegments();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "light"];
@@ -19,6 +25,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
+    const inOnboarding = segments[0] === "onboarding";
 
     if (!user) {
       // User is not authenticated
@@ -26,14 +33,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
         // Redirect to sign-in if not already in auth routes
         router.replace("/(auth)/sign-in");
       }
-    } else {
-      // User is authenticated
-      if (inAuthGroup) {
-        // Redirect to main app if user is authenticated but in auth routes
-        router.replace("/(tabs)");
-      }
+      return;
     }
-  }, [user, isLoading, segments]);
+
+    // Signed in. Wait for the profile before deciding anything about
+    // onboarding — routing off a not-yet-loaded profile would bounce an
+    // existing user through the flow a second time.
+    if (profileLoading || !profile) return;
+
+    if (!isOnboarded) {
+      if (!inOnboarding) router.replace("/onboarding");
+      return;
+    }
+
+    if (inAuthGroup || inOnboarding) {
+      router.replace("/(tabs)");
+    }
+  }, [user, isLoading, segments, isOnboarded, profileLoading, profile]);
 
   if (isLoading) {
     return (

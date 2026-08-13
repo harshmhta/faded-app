@@ -79,6 +79,10 @@ export default function RootLayout() {
                     name="oauth-success"
                     options={{ headerShown: false }}
                   />
+                  <Stack.Screen
+                    name="onboarding"
+                    options={{ headerShown: false, gestureEnabled: false }}
+                  />
                   <Stack.Screen name="+not-found" />
                   <Stack.Screen
                     name="appearance"

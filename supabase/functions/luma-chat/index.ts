@@ -17,6 +17,12 @@ import {
   detectCrisisLanguage,
   type UserContext,
 } from "../_shared/prompt.ts";
+import {
+  FREQUENCY_LABELS,
+  REASON_LABELS,
+  TRIGGER_LABELS,
+  resolveLabels,
+} from "../_shared/labels.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.6-flash";
@@ -170,7 +176,7 @@ Deno.serve(async (req) => {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("display_name, quit_date, daily_spend, currency")
+        .select("display_name, quit_date, daily_spend, currency, onboarding_answers")
         .eq("id", user.id)
         .maybeSingle(),
       supabase
@@ -206,6 +212,8 @@ Deno.serve(async (req) => {
     : null;
   const dailySpend = profile?.daily_spend ? Number(profile.daily_spend) : null;
 
+  const answers = (profile?.onboarding_answers ?? {}) as Record<string, unknown>;
+
   const context: UserContext = {
     displayName: profile?.display_name ?? null,
     daysClean,
@@ -220,6 +228,12 @@ Deno.serve(async (req) => {
     streakDays: progressResult.data?.streak_days ?? null,
     loggedConsumptionToday:
       (todayLogResult.data?.status as "clean" | "smoked" | undefined) ?? null,
+    triggers: resolveLabels(answers.triggers, TRIGGER_LABELS),
+    reasons: resolveLabels(answers.reasons, REASON_LABELS),
+    usageFrequency:
+      typeof answers.frequency === "string"
+        ? (FREQUENCY_LABELS[answers.frequency] ?? null)
+        : null,
   };
 
   // This is the fix for the old client, which sent only the newest message and

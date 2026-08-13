@@ -22,6 +22,10 @@ export interface UserContext {
   currentChapter: number | null;
   streakDays: number | null;
   loggedConsumptionToday: "clean" | "smoked" | null;
+  /** Human-readable labels resolved from the onboarding answers. */
+  triggers: string[];
+  reasons: string[];
+  usageFrequency: string | null;
 }
 
 const BASE_INSTRUCTION = `
@@ -129,6 +133,24 @@ export function buildSystemInstruction(context: UserContext): string {
   if (context.estimatedSaved !== null && context.estimatedSaved > 0) {
     lines.push(
       `Estimated money not spent since quitting: ${context.currency} ${context.estimatedSaved.toFixed(0)}`,
+    );
+  }
+
+  if (context.usageFrequency) {
+    lines.push(`Usage before quitting: ${context.usageFrequency}`);
+  }
+
+  if (context.triggers.length > 0) {
+    lines.push(
+      `Triggers they named at signup: ${context.triggers.join(", ")}. ` +
+        "Use these to ask better questions, not to tell them what they are feeling.",
+    );
+  }
+
+  if (context.reasons.length > 0) {
+    lines.push(
+      `Why they said they want to stop: ${context.reasons.join(", ")}. ` +
+        "Reflecting one of these back can help on a hard day — sparingly, and never as a guilt trip.",
     );
   }
 

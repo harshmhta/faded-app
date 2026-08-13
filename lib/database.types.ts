@@ -28,6 +28,7 @@ export interface Database {
           daily_spend: number;
           currency: string;
           onboarded_at: string | null;
+          onboarding_answers: OnboardingAnswers;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +40,7 @@ export interface Database {
           daily_spend?: number;
           currency?: string;
           onboarded_at?: string | null;
+          onboarding_answers?: OnboardingAnswers;
         };
         Update: {
           display_name?: string | null;
@@ -47,6 +49,7 @@ export interface Database {
           daily_spend?: number;
           currency?: string;
           onboarded_at?: string | null;
+          onboarding_answers?: OnboardingAnswers;
         };
         Relationships: [];
       };
@@ -209,6 +212,25 @@ export interface Database {
 
     CompositeTypes: Record<string, never>;
   };
+}
+
+/**
+ * Answers collected during onboarding. Every field is optional — the flow can
+ * be skipped forward, and the question set changes over time.
+ */
+export interface OnboardingAnswers {
+  frequency?: string;
+  duration?: string;
+  timesOfDay?: string[];
+  triggers?: string[];
+  effects?: string[];
+  reasons?: string[];
+  /** What they said they spend, before it was normalised to daily_spend. */
+  spendAmount?: number;
+  spendPeriod?: "day" | "week" | "month";
+  /** Set when the user said they had already stopped before signing up. */
+  backdatedQuitDate?: string;
+  completedAt?: string;
 }
 
 /** Matches the check constraint on consumption_logs.status. */

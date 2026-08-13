@@ -46,7 +46,12 @@ The project ref is the subdomain in your project URL
 supabase db push
 ```
 
-This applies `supabase/migrations/20260813000000_init.sql`, which creates:
+This applies both migrations in `supabase/migrations/`. The second one adds
+`profiles.onboarding_answers` (jsonb), which stores what the user tells the
+onboarding flow. It is read whole rather than queried, so it is deliberately
+not normalised into columns — the question set changes as the flow is tuned.
+
+The first migration creates:
 
 | Table | Purpose |
 | --- | --- |
