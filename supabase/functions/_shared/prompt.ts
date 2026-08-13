@@ -100,13 +100,14 @@ export function buildSystemInstruction(context: UserContext): string {
     lines.push(`Name: ${context.displayName}`);
   }
 
+  // The quit date starts when the account is created, so day zero means they
+  // signed up today — which is worth knowing, because that person is at the
+  // very beginning and has no track record to reference yet.
   if (context.daysClean !== null && context.quitDate) {
     lines.push(
-      `Days since quit date: ${context.daysClean} (quit date ${context.quitDate.slice(0, 10)})`,
-    );
-  } else {
-    lines.push(
-      "Quit date: not set yet — they have not finished onboarding. Do not ask about a day count.",
+      context.daysClean === 0
+        ? `Days since quit date: 0 — they committed today. Treat this as day one, not as a failure.`
+        : `Days since quit date: ${context.daysClean} (committed on ${context.quitDate.slice(0, 10)})`,
     );
   }
 

@@ -198,7 +198,9 @@ export default function HomeScreen() {
 
           {/* Savings was built but had been dropped from this layout — the
               component was imported and never rendered. Now wired to the real
-              quit date and spend instead of the placeholder values. */}
+              quit date and spend instead of the placeholder values.
+              The guard is for the loading window only; the quit date always
+              exists once the profile resolves. */}
           {quitDate && (
             <SavingsCalculatorCardCompact
               startDate={quitDate}

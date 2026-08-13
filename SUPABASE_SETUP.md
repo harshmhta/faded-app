@@ -50,7 +50,7 @@ This applies `supabase/migrations/20260813000000_init.sql`, which creates:
 
 | Table | Purpose |
 | --- | --- |
-| `profiles` | Quit date, daily spend, currency, onboarding state. One row per user. |
+| `profiles` | Quit date, daily spend, currency, onboarding state. One row per user. `quit_date` is set to `now()` by the signup trigger — creating an account is the commitment, so the clock starts there. |
 | `sobriety_resets` | History of quit-date changes, so a relapse timeline is possible later. |
 | `mood_check_ins` | One row per user per day. Unique on `(user_id, entry_date)`. |
 | `consumption_logs` | One row per user per day. `status` is `clean` or `smoked`. |
@@ -63,7 +63,9 @@ It also creates:
   write their own rows, enforced by Postgres rather than asserted by the client.
 - **`handle_new_user`** — a trigger on `auth.users` that provisions a `profiles`
   row and a `course_progress` row on signup, so the app never has to
-  special-case a missing profile.
+  special-case a missing profile. This is also where `quit_date` is stamped, so
+  the sobriety clock starts at the account's actual creation instant rather than
+  whenever the timer card first renders.
 - **`delete_own_account()`** — an RPC the signed-in user can call to delete
   their account. Everything cascades from `auth.users`, so one delete removes
   all their data. (Wired to a UI control is still to do — see the readiness

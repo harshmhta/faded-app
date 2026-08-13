@@ -23,7 +23,8 @@ export interface Database {
           id: string;
           display_name: string | null;
           avatar_url: string | null;
-          quit_date: string | null;
+          /** Always set — starts at signup. */
+          quit_date: string;
           daily_spend: number;
           currency: string;
           onboarded_at: string | null;

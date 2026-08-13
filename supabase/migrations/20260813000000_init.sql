@@ -3,8 +3,11 @@
 -- Design notes:
 --   * Every user-owned table carries user_id and is protected by RLS keyed on auth.uid().
 --     Ownership is enforced by Postgres, not asserted by the client.
---   * quit_date lives on profiles and is NULLABLE. Null means "not onboarded yet" — the app
---     must not invent a quit date on first read the way the old Appwrite timer did.
+--   * quit_date lives on profiles and starts at signup. Creating an account is the moment
+--     the user commits to quitting, so the clock starts there. It is set by the signup
+--     trigger rather than lazily on first render of the timer card, so the start time is
+--     the account's actual creation instant and not whenever a component happened to mount.
+--     Users can move it afterwards (relapse or correction) via sobriety_resets.
 --   * Daily tracking tables carry a unique (user_id, entry_date) so the client can upsert
 --     instead of doing a read-then-write that races against itself.
 
@@ -34,7 +37,7 @@ create table public.profiles (
   id             uuid primary key references auth.users (id) on delete cascade,
   display_name   text,
   avatar_url     text,
-  quit_date      timestamptz,
+  quit_date      timestamptz    not null default now(),
   daily_spend    numeric(10, 2) not null default 15 check (daily_spend >= 0 and daily_spend <= 99999),
   currency       text           not null default 'USD',
   onboarded_at   timestamptz,
@@ -43,7 +46,12 @@ create table public.profiles (
 );
 
 comment on column public.profiles.quit_date is
-  'Null until the user completes onboarding. Never default this to now().';
+  'Starts at account creation — signing up is the commitment. Moved later only by
+   an explicit user action, which also writes a sobriety_resets row.';
+
+comment on column public.profiles.onboarded_at is
+  'Null until the user finishes onboarding. Tracks the onboarding flow only —
+   it does not gate the quit date, which is already running.';
 
 alter table public.profiles enable row level security;
 
@@ -76,7 +84,9 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, display_name, avatar_url)
+  -- quit_date is set here, at account creation, because signing up is the
+  -- point at which the user commits to quitting.
+  insert into public.profiles (id, display_name, avatar_url, quit_date)
   values (
     new.id,
     coalesce(
@@ -84,7 +94,8 @@ begin
       new.raw_user_meta_data ->> 'name',
       split_part(coalesce(new.email, ''), '@', 1)
     ),
-    new.raw_user_meta_data ->> 'avatar_url'
+    new.raw_user_meta_data ->> 'avatar_url',
+    now()
   )
   on conflict (id) do nothing;
 

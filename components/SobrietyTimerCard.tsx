@@ -317,43 +317,29 @@ const SobrietyTimerCard = React.forwardRef<
     );
   }
 
-  // No quit date yet. Prompt for one instead of showing a timer counting from
-  // an invented start — the old version silently created a record at "now" the
-  // first time this card mounted.
+  // The quit date always exists once the profile has loaded — it starts at
+  // signup. Reaching here means the profile is still in flight.
   if (!startTime) {
     return (
-      <>
-        <Pressable
-          onPress={handleResetPress}
-          accessibilityRole="button"
-          accessibilityLabel="Set your quit date"
-          style={({ pressed }) => [
-            styles.container,
-            {
-              opacity: pressed ? 0.85 : 1,
-              backgroundColor: isDark
-                ? "rgba(0,0,0,0.3)"
-                : "rgba(255,255,255,0.7)",
-            },
-          ]}
-        >
-          <BlurView
-            tint={isDark ? "dark" : "light"}
-            intensity={isDark ? 60 : 40}
-            style={styles.blurBackground}
-          />
-          <View style={styles.loadingContainer}>
-            <ThemedText style={styles.emptyTitle}>
-              Set your quit date
-            </ThemedText>
-            <ThemedText style={styles.emptySubtitle}>
-              Tap to choose when you started. Your streak and savings are
-              counted from here.
-            </ThemedText>
-          </View>
-        </Pressable>
-        {renderResetModal()}
-      </>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: isDark
+              ? "rgba(0,0,0,0.3)"
+              : "rgba(255,255,255,0.7)",
+          },
+        ]}
+      >
+        <BlurView
+          tint={isDark ? "dark" : "light"}
+          intensity={isDark ? 60 : 40}
+          style={styles.blurBackground}
+        />
+        <View style={styles.loadingContainer}>
+          <ThemedText style={styles.loadingText}>Loading...</ThemedText>
+        </View>
+      </View>
     );
   }
 
@@ -600,18 +586,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     fontFamily: FontFamily.medium,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontFamily: FontFamily.medium,
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    textAlign: "center",
-    opacity: 0.65,
   },
   mainContent: {
     padding: 20,

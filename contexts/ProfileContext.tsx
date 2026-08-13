@@ -17,31 +17,36 @@ import type { Profile } from "@/lib/database.types";
  * The single source of truth for quit date and spending baseline.
  *
  * Previously the home screen held a hard-coded `sobrietyStartDate` of "5 days
- * ago" and an unpersisted `dailySpending` of 15, which meant the savings card
- * and the sobriety timer displayed numbers derived from different data. Both
- * now read from here.
+ * ago" and an unpersisted `dailySpending` of 15, which meant anything reading
+ * those values was working from different data than the timer. Both now read
+ * from here.
+ *
+ * The quit date always exists — it starts when the account is created, because
+ * signing up is the commitment. `null` on these fields means "profile not
+ * loaded yet", never "the user hasn't set one".
  */
 export interface ProfileContextType {
   profile: Profile | null;
   isLoading: boolean;
   error: string | null;
 
-  /** Null until the user sets a quit date during onboarding. */
+  /** Null only while the profile is loading. */
   quitDate: Date | null;
-  /** Whole days since the quit date, or null if it isn't set. */
+  /** Whole days since the quit date. Null only while loading. */
   daysClean: number | null;
   dailySpend: number;
   currency: string;
-  /** Money not spent since the quit date. Null when the quit date is unset. */
+  /** Money not spent since the quit date. Null only while loading. */
   estimatedSaved: number | null;
-  /** False until onboarding is finished — drives the first-run flow. */
+  /** Whether the onboarding flow has been completed. Does not gate the timer. */
   isOnboarded: boolean;
 
   refresh: () => Promise<void>;
   completeOnboarding: (input: {
-    quitDate: Date;
     dailySpend: number;
     currency?: string;
+    /** Only if onboarding lets the user backdate to before signup. */
+    quitDate?: Date;
   }) => Promise<void>;
   setDailySpend: (amount: number) => Promise<void>;
   resetQuitDate: (newQuitDate: Date, reason?: string) => Promise<void>;
@@ -79,7 +84,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const completeOnboarding = useCallback(
-    async (input: { quitDate: Date; dailySpend: number; currency?: string }) => {
+    async (input: {
+      dailySpend: number;
+      currency?: string;
+      quitDate?: Date;
+    }) => {
       if (!user) throw new Error("Not signed in");
       setProfile(await profileService.completeOnboarding(user.id, input));
     },
@@ -136,7 +145,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       dailySpend,
       currency: profile?.currency ?? "USD",
       estimatedSaved: daysClean !== null ? daysClean * dailySpend : null,
-      isOnboarded: !!profile?.onboarded_at && !!profile?.quit_date,
+      isOnboarded: !!profile?.onboarded_at,
       refresh: load,
       completeOnboarding,
       setDailySpend,

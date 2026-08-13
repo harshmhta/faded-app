@@ -78,16 +78,22 @@ export const profileService = {
     return unwrap(result, "Failed to update profile");
   },
 
-  /** Complete onboarding: record the real quit date and spending baseline. */
+  /**
+   * Complete onboarding: record the spending baseline and mark the flow done.
+   *
+   * The quit date is already running from signup, so it is optional here —
+   * pass one only if onboarding lets the user say they actually stopped
+   * earlier than the moment they created the account.
+   */
   async completeOnboarding(
     userId: string,
-    input: { quitDate: Date; dailySpend: number; currency?: string },
+    input: { dailySpend: number; currency?: string; quitDate?: Date },
   ): Promise<Profile> {
     return this.update(userId, {
-      quit_date: input.quitDate.toISOString(),
       daily_spend: input.dailySpend,
       currency: input.currency ?? "USD",
       onboarded_at: new Date().toISOString(),
+      ...(input.quitDate ? { quit_date: input.quitDate.toISOString() } : {}),
     });
   },
 
