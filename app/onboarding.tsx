@@ -35,6 +35,7 @@ import {
   DURATION_OPTIONS,
   EFFECT_GROUPS,
   FREQUENCY_OPTIONS,
+  GOAL_OPTIONS,
   REASON_OPTIONS,
   SPEND_PERIODS,
   TIME_OF_DAY_OPTIONS,
@@ -59,6 +60,7 @@ const STEPS = [
   "analyzing",
   "results",
   "quitDate",
+  "goal",
   "pledge",
 ] as const;
 
@@ -86,6 +88,7 @@ export default function OnboardingScreen() {
   const [backdate, setBackdate] = React.useState<Date>(
     () => new Date(Date.now() - 86_400_000),
   );
+  const [goalDays, setGoalDays] = React.useState<string | null>("30");
 
   const step = STEPS[stepIndex];
   const progress = (stepIndex + 1) / STEPS.length;
@@ -130,6 +133,7 @@ export default function OnboardingScreen() {
           backdatedQuitDate: alreadyStopped
             ? backdate.toISOString()
             : undefined,
+          goalDays: goalDays ? Number(goalDays) : undefined,
         },
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -289,6 +293,22 @@ export default function OnboardingScreen() {
           />
         );
 
+      case "goal":
+        return (
+          <View>
+            {renderList(
+              GOAL_OPTIONS,
+              goalDays,
+              (id) => setGoalDays(id),
+              "radio",
+            )}
+            <ThemedText style={styles.goalNote}>
+              You can change this whenever you want. Hitting it isn&apos;t the
+              point — having somewhere to aim is.
+            </ThemedText>
+          </View>
+        );
+
       case "pledge":
         return <PledgeStep onComplete={finish} saving={saving} />;
     }
@@ -374,6 +394,14 @@ export default function OnboardingScreen() {
       title: "When did the clock start?",
       cta: "Continue",
       disabled: alreadyStopped === null,
+      onCta: goNext,
+    },
+    goal: {
+      title: "What are you aiming at first?",
+      subtitle:
+        "Something close enough to feel real. You get a badge either way.",
+      cta: "Commit to this",
+      disabled: !goalDays,
       onCta: goNext,
     },
     pledge: { scrollable: false },
@@ -675,6 +703,14 @@ function PledgeStep({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  goalNote: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    opacity: 0.5,
+    textAlign: "center",
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
   group: { marginBottom: 18 },
   groupTitle: {
     fontSize: 13,

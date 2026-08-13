@@ -114,6 +114,35 @@ export const REASON_OPTIONS: ChoiceOption[] = [
   { id: "prove", label: "Prove to myself I can" },
 ];
 
+/**
+ * First streak target.
+ *
+ * Borrowed from Liven's "set your next streak goal" step, but pinned to the
+ * milestone ladder SobrietyTimerCard already uses (1, 7, 30, 90, 180, 365) so
+ * the goal and the badge the app awards are the same thing rather than two
+ * competing number systems.
+ *
+ * Deliberately stops at 90. Asking someone on day zero to commit to a year is
+ * how a goal becomes something to fail at.
+ */
+export const GOAL_OPTIONS: ChoiceOption[] = [
+  {
+    id: "7",
+    label: "One week",
+    sublabel: "The first stretch, and the one most people feel",
+  },
+  {
+    id: "30",
+    label: "One month",
+    sublabel: "Long enough for sleep and mood to settle",
+  },
+  {
+    id: "90",
+    label: "Three months",
+    sublabel: "A serious target — pick it if you mean it",
+  },
+];
+
 export const SPEND_PERIODS = [
   { id: "day", label: "a day" },
   { id: "week", label: "a week" },

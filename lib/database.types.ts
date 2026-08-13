@@ -230,6 +230,8 @@ export interface OnboardingAnswers {
   spendPeriod?: "day" | "week" | "month";
   /** Set when the user said they had already stopped before signing up. */
   backdatedQuitDate?: string;
+  /** First streak target in days. Matches a milestone in SobrietyTimerCard. */
+  goalDays?: number;
   completedAt?: string;
 }
 

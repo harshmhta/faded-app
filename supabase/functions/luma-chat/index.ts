@@ -234,6 +234,8 @@ Deno.serve(async (req) => {
       typeof answers.frequency === "string"
         ? (FREQUENCY_LABELS[answers.frequency] ?? null)
         : null,
+    goalDays:
+      typeof answers.goalDays === "number" ? answers.goalDays : null,
   };
 
   // This is the fix for the old client, which sent only the newest message and

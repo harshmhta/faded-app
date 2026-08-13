@@ -45,7 +45,7 @@ const SobrietyTimerCard = React.forwardRef<
   // The quit date comes from the profile, which is also what the savings card
   // and Luma read. There is no separate timer record, and nothing invents a
   // start time when one hasn't been set.
-  const { quitDate, isLoading, resetQuitDate } = useProfile();
+  const { quitDate, isLoading, resetQuitDate, goalDays } = useProfile();
 
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [showResetModal, setShowResetModal] = useState(false);
@@ -346,6 +346,14 @@ const SobrietyTimerCard = React.forwardRef<
   const timeDiff = calculateTimeDifference();
   const milestone = getMilestone(timeDiff.days);
 
+  // Progress toward the target chosen during onboarding. Separate from the
+  // milestone badge above, which is currently commented out in the JSX.
+  const goalProgress =
+    goalDays && goalDays > 0
+      ? Math.min(1, timeDiff.days / goalDays)
+      : null;
+  const daysToGoal = goalDays ? Math.max(0, goalDays - timeDiff.days) : 0;
+
   return (
     <>
       <View
@@ -520,6 +528,48 @@ const SobrietyTimerCard = React.forwardRef<
             </View>
           </View>
 
+          {/* Progress toward the goal set during onboarding. */}
+          {goalProgress !== null && (
+            <View style={styles.goalContainer}>
+              <View style={styles.goalLabelRow}>
+                <ThemedText
+                  style={[
+                    styles.goalLabel,
+                    isDark ? styles.subtitleDark : styles.subtitleLight,
+                  ]}
+                >
+                  {daysToGoal > 0
+                    ? `${daysToGoal} ${daysToGoal === 1 ? "day" : "days"} to your ${goalDays}-day goal`
+                    : `You passed your ${goalDays}-day goal`}
+                </ThemedText>
+                <ThemedText style={styles.goalPercent}>
+                  {Math.round(goalProgress * 100)}%
+                </ThemedText>
+              </View>
+              <View
+                style={[
+                  styles.goalTrack,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.10)"
+                      : "rgba(0,0,0,0.07)",
+                  },
+                ]}
+              >
+                <View
+                  style={[styles.goalFill, { width: `${goalProgress * 100}%` }]}
+                >
+                  <LinearGradient
+                    colors={["#4CAF50", "#81C784"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Milestone Badge - COMMENTED OUT */}
           {/* <View style={styles.milestoneContainer}>
             <View
@@ -631,6 +681,20 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     marginBottom: 16,
   },
+  goalContainer: { marginTop: 18, gap: 8 },
+  goalLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  goalLabel: { fontSize: 13.5 },
+  goalPercent: {
+    fontSize: 13.5,
+    fontFamily: FontFamily.medium,
+    color: "#4CAF50",
+  },
+  goalTrack: { height: 6, borderRadius: 999, overflow: "hidden" },
+  goalFill: { height: "100%", borderRadius: 999, overflow: "hidden" },
   milestoneContainer: {
     alignItems: "center",
     gap: 8,

@@ -40,6 +40,8 @@ export interface ProfileContextType {
   estimatedSaved: number | null;
   /** Whether the onboarding flow has been completed. Does not gate the timer. */
   isOnboarded: boolean;
+  /** First streak target chosen during onboarding, in days. */
+  goalDays: number | null;
 
   refresh: () => Promise<void>;
   completeOnboarding: (input: {
@@ -148,6 +150,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       currency: profile?.currency ?? "USD",
       estimatedSaved: daysClean !== null ? daysClean * dailySpend : null,
       isOnboarded: !!profile?.onboarded_at,
+      goalDays: profile?.onboarding_answers?.goalDays ?? null,
       refresh: load,
       completeOnboarding,
       setDailySpend,

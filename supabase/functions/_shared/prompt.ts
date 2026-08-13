@@ -26,6 +26,8 @@ export interface UserContext {
   triggers: string[];
   reasons: string[];
   usageFrequency: string | null;
+  /** First streak target they picked, in days. */
+  goalDays: number | null;
 }
 
 const BASE_INSTRUCTION = `
@@ -151,6 +153,16 @@ export function buildSystemInstruction(context: UserContext): string {
     lines.push(
       `Why they said they want to stop: ${context.reasons.join(", ")}. ` +
         "Reflecting one of these back can help on a hard day — sparingly, and never as a guilt trip.",
+    );
+  }
+
+  if (context.goalDays !== null) {
+    const remaining =
+      context.daysClean !== null ? context.goalDays - context.daysClean : null;
+    lines.push(
+      remaining !== null && remaining > 0
+        ? `First target they set: ${context.goalDays} days (${remaining} to go).`
+        : `First target they set: ${context.goalDays} days — already passed it.`,
     );
   }
 
