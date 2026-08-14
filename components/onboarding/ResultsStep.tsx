@@ -87,6 +87,30 @@ export function ResultsStep({
     width: `${barFill.value * 100}%`,
   }));
 
+  // The user can skip the spend question. Showing a projected figure built on
+  // an invented default under "based on what you told us" would be a lie —
+  // show a quiet nudge instead.
+  if (dailySpend <= 0) {
+    return (
+      <View style={styles.container}>
+        <Animated.View entering={FadeInDown.duration(400)}>
+          <GlassPanel style={styles.hero}>
+            <ThemedText style={styles.heroLabel}>Money</ThemedText>
+            <ThemedText style={styles.quoteText}>
+              You skipped the spending question — fair enough. Add a number
+              any time from the savings card and the math fills itself in.
+            </ThemedText>
+          </GlassPanel>
+        </Animated.View>
+        <StatsAndReason
+          triggerCount={triggerCount}
+          reasonCount={reasonCount}
+          topReason={topReason}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Animated.View entering={FadeInDown.duration(400)}>
@@ -127,6 +151,27 @@ export function ResultsStep({
         </GlassPanel>
       </Animated.View>
 
+      <StatsAndReason
+        triggerCount={triggerCount}
+        reasonCount={reasonCount}
+        topReason={topReason}
+      />
+    </View>
+  );
+}
+
+/** Stats row, reason card, and footnote — shared by both hero variants. */
+function StatsAndReason({
+  triggerCount,
+  reasonCount,
+  topReason,
+}: {
+  triggerCount: number;
+  reasonCount: number;
+  topReason?: string;
+}) {
+  return (
+    <>
       <Animated.View
         entering={FadeInDown.delay(160).duration(400)}
         style={styles.row}
@@ -163,7 +208,7 @@ export function ResultsStep({
           from scratch.
         </ThemedText>
       </Animated.View>
-    </View>
+    </>
   );
 }
 

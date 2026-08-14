@@ -49,10 +49,18 @@ export default function EmailAuthScreen() {
       } else if (result.message) {
         // The context already translates Supabase errors into something a
         // person can act on, so show it rather than a generic failure.
+        // The confirm-your-inbox case is a success dressed as a failure —
+        // don't headline it as an error.
+        const isConfirmEmail = result.message.startsWith("Check your inbox");
         Alert.alert(
-          mode === "signin" ? "Couldn't sign in" : "Couldn't create account",
+          isConfirmEmail
+            ? "One more step"
+            : mode === "signin"
+              ? "Couldn't sign in"
+              : "Couldn't create account",
           result.message,
         );
+        if (isConfirmEmail) setMode("signin");
       }
     } finally {
       setIsSubmitting(false);

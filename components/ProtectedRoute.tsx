@@ -51,7 +51,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
   }, [user, isLoading, segments, isOnboarded, profileLoading, profile]);
 
-  if (isLoading) {
+  // Hold the spinner while the profile is still in flight for a signed-in
+  // user — otherwise the tabs flash for a frame before a non-onboarded user
+  // is redirected into the onboarding flow. If the profile load *failed*
+  // (profileLoading false, profile null), fall through and render the app:
+  // a network error should degrade to "assume onboarded", not a dead spinner.
+  if (isLoading || (user && profileLoading && !profile)) {
     return (
       <View
         style={[styles.loadingContainer, { backgroundColor: "transparent" }]}

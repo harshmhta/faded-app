@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/constants/Colors";
 import { createSessionFromUrl } from "@/contexts/AuthContext";
 import { useColorScheme } from "@/hooks/useColorScheme";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Landing route for the web OAuth redirect. Native sign-in completes inside
@@ -26,8 +27,15 @@ export default function OAuthSuccessScreen() {
         if (href) {
           const result = await createSessionFromUrl(href);
           if (!result.ok && result.message) {
-            setError(result.message);
-            return;
+            // On web, detectSessionInUrl means supabase-js may have already
+            // exchanged this one-time code before we did — our exchange then
+            // fails even though sign-in succeeded. Only surface the error if
+            // there is genuinely no session.
+            const { data } = await supabase.auth.getSession();
+            if (!data.session) {
+              setError(result.message);
+              return;
+            }
           }
         }
         router.replace("/(tabs)");

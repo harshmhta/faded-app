@@ -78,6 +78,30 @@ function rowToProgress(row: CourseProgressRow): CourseProgress {
   };
 }
 
+/**
+ * Pure streak update: same-day is a no-op, consecutive-day increments,
+ * a gap resets to 1. Returns the input object unchanged when nothing moves,
+ * so callers can cheaply detect "no write needed".
+ */
+function applyStreak(progress: CourseProgress): CourseProgress {
+  const today = toEntryDate();
+
+  if (!progress.lastStreakDate) {
+    return { ...progress, streakDays: 1, lastStreakDate: today };
+  }
+
+  // Older rows may hold a full ISO timestamp; take the date portion.
+  const last = progress.lastStreakDate.slice(0, 10);
+  if (last === today) return progress;
+
+  const yesterday = toEntryDate(new Date(Date.now() - 86_400_000));
+  return {
+    ...progress,
+    streakDays: last === yesterday ? progress.streakDays + 1 : 1,
+    lastStreakDate: today,
+  };
+}
+
 function progressToPatch(progress: CourseProgress) {
   return {
     current_chapter: progress.currentChapter,
@@ -157,10 +181,25 @@ export function CourseProgressProvider({ children }: { children: ReactNode }) {
       try {
         const row = await courseProgressService.ensure(user.id);
         if (!active) return;
-        const serverProgress = rowToProgress(row);
+
+        // Roll the streak forward as part of the load. Previously this only
+        // happened when the course tab called calculateStreak() on mount,
+        // which no-oped whenever the tab rendered before the data arrived.
+        const serverProgress = applyStreak(rowToProgress(row));
         setProgress(serverProgress);
         setError(null);
         await AsyncStorage.setItem(cacheKey, JSON.stringify(serverProgress));
+
+        if (serverProgress.lastStreakDate !== row.last_streak_date?.slice(0, 10)) {
+          // Streak moved — push it so the server copy matches. A failure here
+          // is recoverable (recomputed on next load), so don't surface it.
+          await courseProgressService
+            .update(user.id, {
+              streak_days: serverProgress.streakDays,
+              last_streak_date: serverProgress.lastStreakDate,
+            })
+            .catch(() => {});
+        }
       } catch (err) {
         if (!active) return;
         setError(
@@ -249,26 +288,8 @@ export function CourseProgressProvider({ children }: { children: ReactNode }) {
 
   const calculateStreak = useCallback(async () => {
     if (!progress) return;
-
-    const today = toEntryDate();
-
-    if (!progress.lastStreakDate) {
-      await persist({ ...progress, streakDays: 1, lastStreakDate: today });
-      return;
-    }
-
-    // Stored as a date key going forward, but older rows may hold a full ISO
-    // timestamp — take the date portion either way.
-    const last = progress.lastStreakDate.slice(0, 10);
-    if (last === today) return;
-
-    const yesterday = toEntryDate(new Date(Date.now() - 86_400_000));
-
-    await persist({
-      ...progress,
-      streakDays: last === yesterday ? progress.streakDays + 1 : 1,
-      lastStreakDate: today,
-    });
+    const next = applyStreak(progress);
+    if (next !== progress) await persist(next);
   }, [progress, persist]);
 
   const resetProgress = useCallback(async () => {

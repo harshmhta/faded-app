@@ -33,7 +33,35 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Small values are written directly to <key>, so the common case costs nothing.
  */
 const CHUNK_PREFIX = "__chunks__:";
-const CHUNK_SIZE = 1800;
+
+/**
+ * Measured in UTF-16 code units, but the SecureStore limit is 2048 BYTES.
+ * A BMP character encodes to at most 3 UTF-8 bytes and an astral pair to 4
+ * bytes across its 2 units, so 600 units can never exceed 1800 bytes — safely
+ * under the limit even if every character is CJK. Session JSON is mostly
+ * ASCII, so this typically costs a couple of extra chunk keys, nothing more.
+ */
+const CHUNK_SIZE = 600;
+
+/**
+ * Slice without splitting a surrogate pair across chunks — a lone surrogate
+ * cannot be encoded as valid UTF-8 and would corrupt the stored value.
+ */
+function chunkValue(value: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < value.length) {
+    let end = Math.min(value.length, start + CHUNK_SIZE);
+    const last = value.charCodeAt(end - 1);
+    // High surrogate at the boundary: pull its partner into this chunk.
+    if (end < value.length && last >= 0xd800 && last <= 0xdbff) {
+      end += 1;
+    }
+    chunks.push(value.slice(start, end));
+    start = end;
+  }
+  return chunks;
+}
 
 async function clearChunks(key: string, count: number) {
   const deletions: Promise<void>[] = [];
@@ -83,14 +111,11 @@ const secureStoreAdapter: SupportedStorage = {
       return;
     }
 
-    const count = Math.ceil(value.length / CHUNK_SIZE);
-    for (let i = 0; i < count; i += 1) {
-      await SecureStore.setItemAsync(
-        `${key}.${i}`,
-        value.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
-      );
+    const chunks = chunkValue(value);
+    for (let i = 0; i < chunks.length; i += 1) {
+      await SecureStore.setItemAsync(`${key}.${i}`, chunks[i]);
     }
-    await SecureStore.setItemAsync(key, `${CHUNK_PREFIX}${count}`);
+    await SecureStore.setItemAsync(key, `${CHUNK_PREFIX}${chunks.length}`);
   },
 
   async removeItem(key) {

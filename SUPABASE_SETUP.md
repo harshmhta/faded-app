@@ -35,6 +35,9 @@ supabase login
 supabase link --project-ref <your-project-ref>
 ```
 
+The repo already contains the `supabase/config.toml` the CLI needs, so there
+is no `supabase init` step.
+
 The project ref is the subdomain in your project URL
 (`https://<ref>.supabase.co`).
 

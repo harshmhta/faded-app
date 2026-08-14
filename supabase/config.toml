@@ -1,0 +1,11 @@
+# Minimal CLI project config. `supabase link`, `db push`, and
+# `functions deploy` all require this file to exist; a full config (local dev
+# ports, auth emulation, etc.) can be generated over it with `supabase init`
+# if local development is ever needed.
+
+project_id = "fadedapp"
+
+[functions.luma-chat]
+# The gateway checks for a valid JWT before invoking, and the function then
+# resolves the user itself via getUser(). Keep both layers.
+verify_jwt = true

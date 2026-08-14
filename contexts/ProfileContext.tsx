@@ -74,7 +74,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      setProfile(await profileService.get(user.id));
+      setProfile(await profileService.ensure(user.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't load your profile.");
     } finally {

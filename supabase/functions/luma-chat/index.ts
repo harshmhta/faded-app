@@ -197,11 +197,14 @@ Deno.serve(async (req) => {
         .eq("user_id", user.id)
         .eq("entry_date", today)
         .maybeSingle(),
+      // Newest-first with a limit, then reversed below — ascending+limit would
+      // return the OLDEST messages and silently drop the recent turns once a
+      // conversation outgrows the window.
       supabase
         .from("chat_messages")
-        .select("role, content")
+        .select("role, content, created_at")
         .eq("session_id", sessionId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(HISTORY_TURNS * 2),
     ]);
 
@@ -239,11 +242,15 @@ Deno.serve(async (req) => {
   };
 
   // This is the fix for the old client, which sent only the newest message and
-  // so produced every reply with no memory of the conversation.
-  const history = (historyResult.data ?? []).map((row) => ({
-    role: row.role === "model" ? "model" : "user",
-    parts: [{ text: row.content }],
-  }));
+  // so produced every reply with no memory of the conversation. The query
+  // returned newest-first; the model needs chronological order.
+  const history = (historyResult.data ?? [])
+    .slice()
+    .reverse()
+    .map((row) => ({
+      role: row.role === "model" ? "model" : "user",
+      parts: [{ text: row.content }],
+    }));
 
   const crisis = detectCrisisLanguage(message);
 
@@ -335,9 +342,25 @@ Deno.serve(async (req) => {
 
   // ---- Persist ----------------------------------------------------------
 
+  // Explicit timestamps: both rows of a single insert share the transaction's
+  // now(), which makes `order by created_at` a coin flip between the user
+  // message and the reply. A 1ms offset keeps the ordering deterministic.
+  const persistedAt = Date.now();
   const { error: insertError } = await supabase.from("chat_messages").insert([
-    { session_id: sessionId, user_id: user.id, role: "user", content: message },
-    { session_id: sessionId, user_id: user.id, role: "model", content: reply },
+    {
+      session_id: sessionId,
+      user_id: user.id,
+      role: "user",
+      content: message,
+      created_at: new Date(persistedAt).toISOString(),
+    },
+    {
+      session_id: sessionId,
+      user_id: user.id,
+      role: "model",
+      content: reply,
+      created_at: new Date(persistedAt + 1).toISOString(),
+    },
   ]);
 
   if (insertError) {

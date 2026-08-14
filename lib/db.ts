@@ -59,6 +59,25 @@ export const profileService = {
     return data;
   },
 
+  /**
+   * The signup trigger creates the profile row, but a user created before the
+   * trigger existed — or any trigger mishap — would leave get() returning
+   * null forever. Self-heal by inserting the row; RLS permits inserting own.
+   * Note the DB default stamps quit_date at ensure time for such users.
+   */
+  async ensure(userId: string): Promise<Profile> {
+    const existing = await this.get(userId);
+    if (existing) return existing;
+
+    const result = await supabase
+      .from("profiles")
+      .upsert({ id: userId }, { onConflict: "id" })
+      .select()
+      .single();
+
+    return unwrap(result, "Failed to create profile");
+  },
+
   async update(
     userId: string,
     patch: {

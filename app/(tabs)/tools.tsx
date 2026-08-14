@@ -12,8 +12,7 @@ import {
   Call02Icon,
   ClockIcon,
   CustomerSupportIcon,
-  Delete02Icon,
-  FloppyDiskIcon,
+  Add01Icon,
   Message01Icon,
   MoreVerticalIcon,
   SecurityLockIcon,
@@ -312,12 +311,6 @@ export default function ToolsScreen() {
     }
   };
 
-  const endAndSaveChat = () => {
-    setMessages([]);
-    setCurrentSessionId(null);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
   /** Messages are fetched on demand — the history list only holds titles. */
   const loadChatSession = async (session: ChatSession) => {
     setShowChatHistory(false);
@@ -365,25 +358,9 @@ export default function ToolsScreen() {
   };
 
   const retryMessage = async (messageId: string, originalText: string) => {
-    // Mark message as retrying
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId ? { ...msg, isRetrying: true } : msg,
-      ),
-    );
-
-    // Remove the error message and retry
+    // Drop the error bubble and resend. The user's own message is still on
+    // screen from the first attempt — re-adding it made a duplicate bubble.
     setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-
-    // Resend the message
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: originalText,
-      isUser: true,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
     await sendMessageToAPI(originalText);
   };
 
@@ -567,20 +544,11 @@ export default function ToolsScreen() {
                 <Pressable
                   style={[styles.iconButton, isDark && styles.iconButtonDark]}
                   onPress={clearAllMessages}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start a new chat"
                 >
                   <HugeiconsIcon
-                    icon={Delete02Icon}
-                    size={22}
-                    color={isDark ? "#FF6B6B" : "#FF3B30"}
-                  />
-                </Pressable>
-
-                <Pressable
-                  style={[styles.iconButton, isDark && styles.iconButtonDark]}
-                  onPress={endAndSaveChat}
-                >
-                  <HugeiconsIcon
-                    icon={FloppyDiskIcon}
+                    icon={Add01Icon}
                     size={22}
                     color={isDark ? "#FFFFFF" : "#388E3C"}
                   />

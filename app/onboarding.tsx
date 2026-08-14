@@ -98,7 +98,13 @@ export default function OnboardingScreen() {
   }, []);
 
   const goBack = React.useCallback(() => {
-    setStepIndex((i) => Math.max(i - 1, 0));
+    setStepIndex((i) => {
+      let prev = i - 1;
+      // Never step back INTO the analyzing animation — jump over it so
+      // "back" from the results goes to the last real question.
+      if (STEPS[prev] === "analyzing") prev -= 1;
+      return Math.max(prev, 0);
+    });
   }, []);
 
   const toggle = (
@@ -114,8 +120,8 @@ export default function OnboardingScreen() {
   const parsedSpend = Number.parseFloat(spendAmount.replace(/[^0-9.]/g, ""));
   const dailySpend = toDailySpend(parsedSpend, spendPeriod);
 
-  const finish = async () => {
-    if (saving) return;
+  const finish = async (): Promise<boolean> => {
+    if (saving) return false;
     setSaving(true);
     try {
       await completeOnboarding({
@@ -138,6 +144,7 @@ export default function OnboardingScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
+      return true;
     } catch (error) {
       Alert.alert(
         "Couldn't save that",
@@ -145,6 +152,7 @@ export default function OnboardingScreen() {
           ? error.message
           : "Check your connection and try again.",
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -272,7 +280,7 @@ export default function OnboardingScreen() {
       case "results":
         return (
           <ResultsStep
-            dailySpend={dailySpend > 0 ? dailySpend : 15}
+            dailySpend={dailySpend}
             currency={currency}
             triggerCount={triggers.length}
             reasonCount={reasons.length}
@@ -613,7 +621,8 @@ function PledgeStep({
   onComplete,
   saving,
 }: {
-  onComplete: () => void;
+  /** Resolves false when the save failed, so the button re-arms for a retry. */
+  onComplete: () => Promise<boolean>;
   saving: boolean;
 }) {
   const fill = useSharedValue(0);
@@ -627,10 +636,17 @@ function PledgeStep({
       duration: HOLD_MS,
       easing: Easing.linear,
     });
-    timer.current = setTimeout(() => {
+    timer.current = setTimeout(async () => {
       setHeld(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onComplete();
+      const ok = await onComplete();
+      if (!ok) {
+        // Save failed (finish() already alerted). Re-arm the button —
+        // otherwise a network blip on the last step leaves onboarding
+        // stuck on a permanently disabled "Committed".
+        setHeld(false);
+        fill.value = withTiming(0, { duration: 220 });
+      }
     }, HOLD_MS);
   };
 
